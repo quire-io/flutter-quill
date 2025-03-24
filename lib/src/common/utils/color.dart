@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../editor/widgets/default_styles.dart';
 
-Color stringToColor(String? s,
+Color? stringToColor(String? s,
     [Color? originalColor, DefaultStyles? defaultStyles]) {
   final palette = defaultStyles?.palette;
   if (s != null && palette != null) {
@@ -129,7 +129,8 @@ Color stringToColor(String? s,
   }
 
   if (!s.startsWith('#')) {
-    throw UnsupportedError('Color code not supported');
+    // throw UnsupportedError('Color code not supported');
+    return null; // Potix: let customStyleBuilder handler it
   }
 
   var hex = s.replaceFirst('#', '');

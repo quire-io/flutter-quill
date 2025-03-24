@@ -17,7 +17,8 @@ dynamic getFontSize(dynamic sizeValue) {
   assert(sizeValue is String);
   final fontSize = double.tryParse(sizeValue);
   if (fontSize == null) {
-    throw ArgumentError('Invalid size $sizeValue');
+    // throw ArgumentError('Invalid size $sizeValue');
+    return null; // Potix: let customStyleBuilder handler it
   }
   return fontSize;
 }
@@ -46,7 +47,8 @@ double? getFontSizeAsDouble(dynamic sizeValue,
   assert(sizeValue is String);
   final fontSize = double.tryParse(sizeValue);
   if (fontSize == null) {
-    throw ArgumentError('Invalid size $sizeValue');
+    // throw ArgumentError('Invalid size $sizeValue');
+    return null; // Potix: let customStyleBuilder handler it
   }
   return fontSize;
 }
