@@ -153,6 +153,7 @@ class Attribute<T> {
     Attribute.indent.key,
     Attribute.direction.key,
     Attribute.lineHeight.key,
+    'nested-blockquote', // Potix:
   });
 
   static final Set<String> blockKeysExceptHeader = LinkedHashSet.of({
@@ -163,6 +164,7 @@ class Attribute<T> {
     Attribute.lineHeight.key,
     Attribute.indent.key,
     Attribute.direction.key,
+    'nested-blockquote', // Potix:
   });
 
   static final Set<String> exclusiveBlockKeys = LinkedHashSet.of({
@@ -170,6 +172,7 @@ class Attribute<T> {
     Attribute.list.key,
     Attribute.codeBlock.key,
     Attribute.blockQuote.key,
+    'nested-blockquote', // Potix:
   });
 
   static final Set<String> embedKeys = {
