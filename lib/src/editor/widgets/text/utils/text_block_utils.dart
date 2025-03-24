@@ -59,7 +59,14 @@ abstract final class TextBlockUtils {
     }
 
     if (attrs.containsKey(Attribute.blockQuote.key)) {
-      return HorizontalSpacing(fontSize + extraIndent, 0);
+      final extra = defaultStyles.quote?.decoration?.padding.resolve(TextDirection.ltr) ?? EdgeInsets.zero;
+      return HorizontalSpacing(fontSize + extraIndent + extra.left, extra.right);
+    }
+
+    // Potix:
+    final blockSpacing = defaultStyles.unknownBlockIndentWidth!(attrs, fontSize, indent?.value ?? 0);
+    if (blockSpacing != null) {
+      return blockSpacing;
     }
 
     var baseIndent = 0.0;

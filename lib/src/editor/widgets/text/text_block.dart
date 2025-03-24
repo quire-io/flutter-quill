@@ -137,25 +137,17 @@ class EditableTextBlock extends StatelessWidget {
     );
   }
 
-  BoxDecoration? _getDecorationForBlock(
+  Decoration? _getDecorationForBlock(
       Block node, DefaultStyles? defaultStyles) {
     final attrs = block.style.attributes;
     if (attrs.containsKey(Attribute.blockQuote.key)) {
-      // Verify if the direction is RTL and avoid passing the decoration
-      // to the left when need to be on right side
-      if (textDirection == TextDirection.rtl) {
-        return defaultStyles!.quote!.decoration?.copyWith(
-          border: Border(
-            right: BorderSide(width: 4, color: Colors.grey.shade300),
-          ),
-        );
-      }
       return defaultStyles!.quote!.decoration;
     }
     if (attrs.containsKey(Attribute.codeBlock.key)) {
       return defaultStyles!.code!.decoration;
     }
-    return null;
+    // Potix:
+    return defaultStyles!.unknownBlock!(attrs)?.decoration;
   }
 
   List<Widget> _buildChildren(BuildContext context,
@@ -400,8 +392,10 @@ class EditableTextBlock extends StatelessWidget {
       } else if (attrs.containsKey(Attribute.align.key)) {
         lineSpacing = defaultStyles!.align!.lineSpacing;
       } else {
+        // Potix:
+        final blockStyle = defaultStyles!.unknownBlock!(attrs);
         // use paragraph linespacing as a default
-        lineSpacing = defaultStyles!.paragraph!.lineSpacing;
+        lineSpacing = blockStyle?.lineSpacing ?? defaultStyles.paragraph!.lineSpacing;
       }
       top = lineSpacing.top;
       bottom = lineSpacing.bottom;

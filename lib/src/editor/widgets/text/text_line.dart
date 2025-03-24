@@ -413,6 +413,9 @@ class _TextLineState extends State<TextLine> {
       toMerge = defaultStyles.code!.style;
     } else if (block?.key == Attribute.list.key) {
       toMerge = defaultStyles.lists!.style;
+    } else { // Potix:
+      final blockStyle = defaultStyles.unknownBlock!(widget.line.style.attributes);
+      toMerge = blockStyle?.style;
     }
 
     textStyle = textStyle.merge(toMerge);
@@ -752,7 +755,7 @@ class EditableTextLine extends RenderObjectWidget {
   final double devicePixelRatio;
   final CursorCont cursorCont;
   final InlineCodeStyle inlineCodeStyle;
-  final BoxDecoration? decoration;
+  final Decoration? decoration;
 
   @override
   RenderObjectElement createElement() {
@@ -835,7 +838,7 @@ class RenderEditableTextLine extends RenderEditableBox {
   List<TextBox>? _selectedRects;
   late Rect _caretPrototype;
   InlineCodeStyle inlineCodeStyle;
-  BoxDecoration? decoration;
+  Decoration? decoration;
   final Map<TextLineSlot, RenderBox> children = <TextLineSlot, RenderBox>{};
 
   Iterable<RenderBox> get _children sync* {
@@ -951,7 +954,7 @@ class RenderEditableTextLine extends RenderEditableBox {
     markNeedsLayout();
   }
 
-  void setDecoration(BoxDecoration? newDecoration) {
+  void setDecoration(Decoration? newDecoration) {
     if (decoration == newDecoration) return;
     decoration = newDecoration;
     markNeedsPaint();

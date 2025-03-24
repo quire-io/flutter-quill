@@ -754,7 +754,8 @@ class QuillRawEditorState extends EditorState
     } else if (attrs.containsKey(Attribute.align.key)) {
       return defaultStyles!.align!.horizontalSpacing;
     }
-    return HorizontalSpacing.zero;
+    // Potix:
+    return defaultStyles!.unknownBlock!(attrs)?.horizontalSpacing ?? HorizontalSpacing.zero;
   }
 
   VerticalSpacing _getVerticalSpacingForBlock(
@@ -771,10 +772,11 @@ class QuillRawEditorState extends EditorState
     } else if (attrs.containsKey(Attribute.align.key)) {
       return defaultStyles!.align!.verticalSpacing;
     }
-    return VerticalSpacing.zero;
+    // Potix:
+    return defaultStyles!.unknownBlock!(attrs)?.verticalSpacing ?? VerticalSpacing.zero;
   }
 
-  BoxDecoration? _getDecoration(Node node, DefaultStyles? defaultStyles,
+  Decoration? _getDecoration(Node node, DefaultStyles? defaultStyles,
       Map<String, Attribute<dynamic>> attrs) {
     if (attrs.containsKey(Attribute.header.key)) {
       final level = attrs[Attribute.header.key]!.value;

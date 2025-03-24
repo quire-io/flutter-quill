@@ -61,7 +61,7 @@ class DefaultTextBlockStyle {
   ///
   /// Decoration, if present, is painted in the content area, excluding
   /// any [spacing].
-  final BoxDecoration? decoration;
+  final Decoration? decoration;
 }
 
 /// Theme data for inline code.
@@ -207,6 +207,8 @@ class DefaultStyles {
     this.sizeLarge,
     this.sizeHuge,
     this.palette,
+    this.unknownBlock,
+    this.unknownBlockIndentWidth,
   });
 
   final DefaultTextBlockStyle? h1;
@@ -245,6 +247,13 @@ class DefaultStyles {
 
   /// Custom palette of colors
   final Map<String, Color>? palette;
+
+  // Potix:
+  /// A custom handler for unknown block attributes
+  final DefaultTextBlockStyle? Function(Map<String, Attribute>)? unknownBlock;
+
+  /// A custom handler for unknown block inner indent width
+  final HorizontalSpacing? Function(Map<String, Attribute>, double, int)? unknownBlockIndentWidth;
 
   static DefaultStyles getInstance(BuildContext context) {
     final themeData = Theme.of(context);
@@ -444,8 +453,8 @@ class DefaultStyles {
         baseVerticalSpacing,
         const VerticalSpacing(6, 2),
         BoxDecoration(
-          border: Border(
-            left: BorderSide(width: 4, color: Colors.grey.shade300),
+          border: BorderDirectional(
+            start: BorderSide(width: 4, color: Colors.grey.shade300),
           ),
         ),
       ),
@@ -487,6 +496,8 @@ class DefaultStyles {
       sizeSmall: const TextStyle(fontSize: 10),
       sizeLarge: const TextStyle(fontSize: 18),
       sizeHuge: const TextStyle(fontSize: 22),
+      unknownBlock: (attrs) => null,
+      unknownBlockIndentWidth: (attrs, fontSize, indent) => null,
     );
   }
 
@@ -524,6 +535,8 @@ class DefaultStyles {
       sizeLarge: other.sizeLarge ?? sizeLarge,
       sizeHuge: other.sizeHuge ?? sizeHuge,
       palette: other.palette ?? palette,
+      unknownBlock: other.unknownBlock ?? unknownBlock,
+      unknownBlockIndentWidth: other.unknownBlockIndentWidth ?? unknownBlockIndentWidth,
     );
   }
 }
