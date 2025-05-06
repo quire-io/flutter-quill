@@ -855,8 +855,9 @@ class QuillRawEditorState extends EditorState
       });
     }
 
+    controller.addListener(_didChangeTextEditingValueListener);
+
     if (!widget.config.readOnly) {
-      controller.addListener(_didChangeTextEditingValueListener);
       // listen to composing range changes
       composingRange.addListener(_onComposingRangeChanged);
       // Focus
@@ -967,8 +968,8 @@ class QuillRawEditorState extends EditorState
     assert(!hasConnection);
     _selectionOverlay?.dispose();
     _selectionOverlay = null;
+    controller.removeListener(_didChangeTextEditingValueListener);
     if (!widget.config.readOnly) {
-      controller.removeListener(_didChangeTextEditingValueListener);
       widget.config.focusNode.removeListener(_handleFocusChanged);
       composingRange.removeListener(_onComposingRangeChanged);
     }
@@ -1083,6 +1084,7 @@ class QuillRawEditorState extends EditorState
         contextMenuBuilder: widget.config.contextMenuBuilder == null
             ? null
             : (context) => widget.config.contextMenuBuilder!(context, this),
+        dragOffsetNotifier: widget.dragOffsetNotifier,
       );
       _selectionOverlay!.handlesVisible = _shouldShowSelectionHandles();
       _selectionOverlay!.showHandles();
