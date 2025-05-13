@@ -13,6 +13,7 @@ class QuillClipboardConfig {
     @experimental this.onGifPaste,
     @experimental this.onRichTextPaste,
     @experimental this.onPlainTextPaste,
+    @experimental this.onPlainTextPaste2, // Potix: Added
     @experimental this.enableExternalRichPaste,
   });
 
@@ -83,6 +84,13 @@ class QuillClipboardConfig {
   /// Return modified text to override the pasted content, or `null` to use the default.
   @experimental
   final Future<String?> Function(String plainText)? onPlainTextPaste;
+
+  /// Callback triggered when pasting plain text into the editor.
+  ///
+  /// Returns a modified [Delta] to override the pasted content, or `null` to use the default.
+  /// Potix: Replace [onPlainTextPaste] to return the [Delta] instead of the plain text.
+  @experimental
+  final Future<Delta?> Function(String plainText)? onPlainTextPaste2;
 
   /// Determines if rich text pasting from external sources (system clipboard) is enabled.
   ///

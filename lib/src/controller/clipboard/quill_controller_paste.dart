@@ -9,11 +9,11 @@ import '../../../quill_delta.dart';
 
 extension QuillControllerPaste on QuillController {
   @internal
-  bool pastePlainTextOrDelta(
+  Future<bool> pastePlainTextOrDelta(
     String? clipboardText, {
     required String pastePlainText,
     required Delta pasteDelta,
-  }) {
+  }) async {
     if (clipboardText != null) {
       /// Internal copy-paste preserves styles and embeds
       if (clipboardText == pastePlainText &&
@@ -22,12 +22,29 @@ extension QuillControllerPaste on QuillController {
         replaceText(selection.start, selection.end - selection.start,
             pasteDelta, TextSelection.collapsed(offset: selection.end));
       } else {
+        // Potix: Introduce onPlainTextPaste2 to insert Delta
+        Object? pastedContent = clipboardText;
+
+        final onPlainTextPaste2 = config.clipboardConfig?.onPlainTextPaste2;
+        if (onPlainTextPaste2 != null) {
+          final delta = await onPlainTextPaste2(clipboardText);
+          if (delta != null) {
+            pastedContent = delta;
+          }
+        }
+
+        final newPos = switch (pastedContent) {
+          Delta() => pastedContent.transformPosition(selection.end),
+          String() => selection.end + pastedContent.length,
+          _ => selection.end,
+        };
+
         replaceText(
             selection.start,
             selection.end - selection.start,
-            clipboardText,
+            pastedContent,
             TextSelection.collapsed(
-                offset: selection.end + clipboardText.length));
+                offset: newPos));
       }
       return true;
     }
