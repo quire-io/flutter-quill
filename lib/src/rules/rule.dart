@@ -73,6 +73,9 @@ class Rules {
 
   static Rules getInstance() => _instance;
 
+  /// Potix: always returns a new instance of [Rules] with the default rules.
+  static Rules newInstance() => Rules(_instance._rules);
+
   void setCustomRules(List<Rule> customRules) {
     _customRules = customRules;
   }

@@ -58,7 +58,7 @@ class Document {
   /// Returns contents of this document as [Delta].
   Delta toDelta() => Delta.from(_delta);
 
-  final Rules _rules = Rules.getInstance();
+  final Rules _rules = Rules.newInstance();
 
   void setCustomRules(List<Rule> customRules) {
     _rules.setCustomRules(customRules);
