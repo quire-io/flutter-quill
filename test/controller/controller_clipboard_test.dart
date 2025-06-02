@@ -78,10 +78,10 @@ void main() {
     });
   });
 
-  bool pasteUsingPlainOrDelta(
+  Future<bool> pasteUsingPlainOrDelta(
     QuillController controller,
     String? clipboardText,
-  ) =>
+  ) async =>
       controller.pastePlainTextOrDelta(
         clipboardText,
         pasteDelta: controller.pasteDelta,
@@ -97,7 +97,7 @@ void main() {
             const TextSelection.collapsed(offset: 1), ChangeSource.local);
       //
       expect(controller.document.toPlainText(), '[]\n');
-      expect(pasteUsingPlainOrDelta(controller, 'insert'), true);
+      expect(await pasteUsingPlainOrDelta(controller, 'insert'), true);
       expect(controller.document.toPlainText(), '[insert]\n');
     });
 
@@ -109,7 +109,7 @@ void main() {
             const TextSelection.collapsed(offset: 1), ChangeSource.local);
       //
       expect(controller.document.toPlainText(), '[]\n');
-      expect(pasteUsingPlainOrDelta(controller, '1\n2\n3\n'), true);
+      expect(await pasteUsingPlainOrDelta(controller, '1\n2\n3\n'), true);
       expect(controller.document.toPlainText(), '[1\n2\n3\n]\n');
     });
 
@@ -128,7 +128,7 @@ void main() {
         ..updateSelection(
             const TextSelection.collapsed(offset: 1), ChangeSource.local);
       //
-      expect(pasteUsingPlainOrDelta(controller, 'insert'), true,
+      expect(await pasteUsingPlainOrDelta(controller, 'insert'), true,
           reason: 'External paste');
       expect(controller.document.toPlainText(), '[insert]\n');
     });
@@ -154,7 +154,7 @@ void main() {
         ..updateSelection(
             const TextSelection.collapsed(offset: 1), ChangeSource.local);
       //
-      expect(pasteUsingPlainOrDelta(controller, 'n te'), true,
+      expect(await pasteUsingPlainOrDelta(controller, 'n te'), true,
           reason: 'Internal paste');
       expect(controller.document.toPlainText(), '[n te]\n');
       expect(
@@ -204,7 +204,7 @@ void main() {
         ..updateSelection(
             const TextSelection.collapsed(offset: 1), ChangeSource.local);
       //
-      expect(pasteUsingPlainOrDelta(controller, plainSelection), true,
+      expect(await pasteUsingPlainOrDelta(controller, plainSelection), true,
           reason: 'Internal paste');
       expect(controller.document.toPlainText(), '[$plainSelection]\n');
       expect(
