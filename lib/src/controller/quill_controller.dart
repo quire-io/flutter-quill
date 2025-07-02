@@ -260,8 +260,12 @@ class QuillController extends ChangeNotifier {
 
   /// clear editor
   void clear() {
-    replaceText(0, plainTextEditingValue.text.length - 1, '',
-        const TextSelection.collapsed(offset: 0));
+    // Potix: use Delta to reset the document
+    compose(
+      Delta()..delete(document.length)..insert('\n'),
+      const TextSelection.collapsed(offset: 0),
+      ChangeSource.local,
+    );
   }
 
   void replaceText(
