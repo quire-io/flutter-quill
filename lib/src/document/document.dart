@@ -471,7 +471,8 @@ class Document {
     } catch (e) {
       throw StateError('_delta compose failed');
     }
-    assert(_delta == _root.toDelta(), 'Compose failed');
+    // Potix: allow to apply Delta with no actual changes, see #22719
+    // assert(_delta == _root.toDelta(), 'Compose failed');
     cachedPlainText = null;
     final change = DocChange(originalDelta, delta, changeSource);
     documentChangeObserver.add(change);
