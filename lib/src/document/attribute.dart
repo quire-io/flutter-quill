@@ -56,6 +56,7 @@ class Attribute<T> {
     Attribute.script.key: Attribute.script,
     Attribute.image.key: Attribute.image,
     Attribute.video.key: Attribute.video,
+    Attribute.table.key: Attribute.table,
   });
 
   static const BoldAttribute bold = BoldAttribute();
@@ -118,6 +119,8 @@ class Attribute<T> {
 
   static const VideoAttribute video = VideoAttribute(null);
 
+  static const TableAttribute table = TableAttribute(null);
+
   static final registeredAttributeKeys = Set.unmodifiable(_registry.keys);
 
   static final inlineKeys = Set.unmodifiable(<String>{
@@ -153,6 +156,7 @@ class Attribute<T> {
     Attribute.indent.key,
     Attribute.direction.key,
     Attribute.lineHeight.key,
+    Attribute.table.key,
     'nested-blockquote', // Potix:
   });
 
@@ -164,6 +168,7 @@ class Attribute<T> {
     Attribute.lineHeight.key,
     Attribute.indent.key,
     Attribute.direction.key,
+    Attribute.table.key,
     'nested-blockquote', // Potix:
   });
 
@@ -421,4 +426,9 @@ class ImageAttribute extends Attribute<String?> {
 class VideoAttribute extends Attribute<String?> {
   const VideoAttribute(String? url)
       : super('video', AttributeScope.embeds, url);
+}
+
+class TableAttribute extends Attribute<String?> {
+  const TableAttribute(String? id)
+      : super('table', AttributeScope.block, id);
 }
