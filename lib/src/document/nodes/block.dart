@@ -13,6 +13,7 @@ import 'node.dart';
 /// - Text Alignment
 /// - Text Direction
 /// - Code Block
+/// - Table
 base class Block extends QuillContainer<Line?> {
   /// Creates new unmounted [Block].
   @override

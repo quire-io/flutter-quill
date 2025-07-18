@@ -19,6 +19,7 @@ import '../default_leading_components/leading_components.dart';
 import '../default_styles.dart';
 import '../delegate.dart';
 import '../link.dart';
+import '../proxy.dart';
 import 'text_line.dart';
 import 'text_selection.dart';
 import 'utils/text_block_utils.dart';
@@ -210,6 +211,59 @@ class EditableTextBlock extends StatelessWidget {
         ),
       );
     }
+
+    // Potix: wrap with the Table
+    final isTable = block.style.attributes.containsKey(Attribute.table.key),
+      hasNextTable = block.next?.style.attributes.containsKey(Attribute.table.key) ?? false;
+    final line = block.first as Line?;
+    if (isTable && line != null) {
+      final tableStyle = defaultStyles?.table ?? const DefaultTableStyle(),
+        border = tableStyle.border ?? const TableBorder(),
+        cellPadding = tableStyle.cellPadding ?? EdgeInsets.zero;
+      return [
+        EditableTextLine(
+          line,
+          null,
+          EmbedProxy(
+            Table(
+              border: TableBorder(
+                top: border.top,
+                left: border.left,
+                right: border.right,
+                bottom: hasNextTable ? BorderSide.none : border.bottom,
+                horizontalInside: border.horizontalInside,
+                verticalInside: border.verticalInside,
+                borderRadius: border.borderRadius,
+              ),
+              children: [
+                TableRow(
+                  children: children
+                    .map((c) => TableCell(
+                      child: Padding(
+                        padding: cellPadding,
+                        child: c,
+                      ),
+                    ))
+                    .toList(growable: false),
+                ),
+              ],
+            ),
+          ),
+          indentWidthBuilder(block, context, count, numberPointWidthBuilder),
+          _getSpacingForLine(line, index, count, defaultStyles),
+          textDirection,
+          textSelection,
+          color,
+          enableInteractiveSelection,
+          hasFocus,
+          MediaQuery.devicePixelRatioOf(context),
+          cursorCont,
+          styles!.inlineCode!,
+          null,
+        ),
+      ];
+    }
+
     return children.toList(growable: false);
   }
 

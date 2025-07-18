@@ -213,6 +213,27 @@ class DefaultListBlockStyle extends DefaultTextBlockStyle {
 }
 
 @immutable
+class DefaultTableStyle {
+  const DefaultTableStyle({
+    this.border,
+    this.cellPadding = const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+  });
+
+  final TableBorder? border;
+  final EdgeInsets? cellPadding;
+
+  DefaultTableStyle copyWith({
+    TableBorder? border,
+    EdgeInsets? cellPadding,
+  }) {
+    return DefaultTableStyle(
+      border: border ?? this.border,
+      cellPadding: cellPadding ?? this.cellPadding,
+    );
+  }
+}
+
+@immutable
 class DefaultStyles {
   const DefaultStyles({
     this.h1,
@@ -247,6 +268,7 @@ class DefaultStyles {
     this.sizeLarge,
     this.sizeHuge,
     this.palette,
+    this.table,
     this.unknownBlock,
     this.unknownBlockIndentWidth,
   });
@@ -289,6 +311,9 @@ class DefaultStyles {
   final Map<String, Color>? palette;
 
   // Potix:
+  /// A table border style.
+  final DefaultTableStyle? table;
+
   /// A custom handler for unknown block attributes
   final DefaultTextBlockStyle? Function(Map<String, Attribute>)? unknownBlock;
 
@@ -536,6 +561,10 @@ class DefaultStyles {
       sizeSmall: const TextStyle(fontSize: 10),
       sizeLarge: const TextStyle(fontSize: 18),
       sizeHuge: const TextStyle(fontSize: 22),
+      table: DefaultTableStyle(
+        border: TableBorder.all(),
+        cellPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      ),
       unknownBlock: (attrs) => null,
       unknownBlockIndentWidth: (attrs, fontSize, indent) => null,
     );
@@ -575,6 +604,7 @@ class DefaultStyles {
       sizeLarge: other.sizeLarge ?? sizeLarge,
       sizeHuge: other.sizeHuge ?? sizeHuge,
       palette: other.palette ?? palette,
+      table: other.table ?? table,
       unknownBlock: other.unknownBlock ?? unknownBlock,
       unknownBlockIndentWidth: other.unknownBlockIndentWidth ?? unknownBlockIndentWidth,
     );
