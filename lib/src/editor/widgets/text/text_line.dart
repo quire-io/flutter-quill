@@ -399,6 +399,11 @@ class _TextLineState extends State<TextLine> {
 
     textStyle = textStyle.merge(m[header] ?? defaultStyles.paragraph!.style);
 
+    if (widget.line.style.attributes.containsKey(Attribute.table.key)
+        && _isInFirstTableRow()) {
+      textStyle = textStyle.merge(defaultStyles.table!.headerStyle);
+    }
+
     // Only retrieve exclusive block format for the line style purpose
     Attribute? block;
     widget.line.style.getBlocksExceptHeader().forEach((key, value) {
@@ -450,6 +455,29 @@ class _TextLineState extends State<TextLine> {
     }
 
     return textStyle;
+  }
+
+  /// Check if this line is in the first table row (header row).
+  bool _isInFirstTableRow() {
+    // Check if this line has table attribute
+    if (!widget.line.style.attributes.containsKey(Attribute.table.key)) {
+      return false;
+    }
+
+    final currentTableValue = widget.line.style.attributes[Attribute.table.key]?.value;
+    final prevBlock = widget.line.parent?.previous;
+    // Check if the parent block has a previous table block with a different table value
+    if (prevBlock is Block) {
+      if (prevBlock.style.attributes.containsKey(Attribute.table.key)) {
+        final prevTableValue = prevBlock.style.attributes[Attribute.table.key]?.value;
+        // If previous block has different table value, this is not the first row
+        if (prevTableValue != currentTableValue) {
+          return false;
+        }
+      }
+    }
+
+    return true; // No previous table row found, this is the first
   }
 
   TextStyle _applyCustomAttributes(

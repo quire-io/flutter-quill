@@ -4,69 +4,153 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Table Test', () {
-    testWidgets('Render a table', (tester) async {
-      await tester.pumpWidget(const TableTestApp());
-      expect(find.text('This is a test with a table block below:', findRichText: true), findsOneWidget);
-      expect(find.byType(Table), findsOneWidget);
-      expect(find.text('Cell A', findRichText: true), findsOneWidget);
-      expect(find.text('Cell B', findRichText: true), findsOneWidget);
+    testWidgets('Verify cells are positioned in the same row', (tester) async {
+      await tester.pumpWidget(const TableTestApp(
+        initialDelta: [
+          {'insert': 'Cell A'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': 'Cell B'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': '\n'},
+        ],
+      ));
+
+      // Find the text widgets for both cells
+      final cellAFinder = find.text('Cell A', findRichText: true);
+      final cellBFinder = find.text('Cell B', findRichText: true);
+
+      expect(cellAFinder, findsOneWidget);
+      expect(cellBFinder, findsOneWidget);
+
+      // Get the positions of both cells
+      final cellARect = tester.getRect(cellAFinder);
+      final cellBRect = tester.getRect(cellBFinder);
+
+      // Verify they are on the same row (same Y position with some tolerance)
+      expect(cellARect.top, equals(cellBRect.top),
+        reason: 'Cell A and Cell B should be at the same vertical position (same row)');
+
+      // Verify Cell B is to the right of Cell A (proper horizontal ordering)
+      expect(cellBRect.left, greaterThan(cellARect.right - 1),
+        reason: 'Cell B should be positioned to the right of Cell A');
+
+      // The cells should have roughly equal widths in our implementation
+      // (allowing some tolerance for text rendering differences)
+      final cellAWidth = cellARect.width;
+      final cellBWidth = cellBRect.width;
+      expect(cellAWidth, closeTo(cellBWidth, 1.0),
+        reason: 'Cell A and Cell B should have similar widths');
+    });
+
+    testWidgets('Verify table header style is applied to first row (single column)', (tester) async {
+      await tester.pumpWidget(const TableTestApp(
+        initialDelta: [
+          {'insert': 'Header Cell A'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': 'Regular Cell A'},
+          {'insert': '\n', 'attributes': {'table': 'row-2'}},
+          {'insert': '\n'},
+        ],
+      ));
+
+      // Find the text widgets for header and regular cells
+      final findHeaderCellA = find.text('Header Cell A', findRichText: true);
+      final findRegularCellA = find.text('Regular Cell A', findRichText: true);
+
+      // Get the rich text widgets to check their styles
+      final headerARichText = tester.widget<RichText>(findHeaderCellA);
+      final regularARichText = tester.widget<RichText>(findRegularCellA);
+
+      // Check that header cells have bold styling (our custom header style)
+      expect(headerARichText.text.style?.fontWeight, equals(FontWeight.bold),
+        reason: 'Header A should be bold');
+
+      // The regular cells should not have bold styling
+      expect(regularARichText.text.style?.fontWeight, isNot(equals(FontWeight.bold)),
+        reason: 'Regular A should not be bold');
+    });
+
+     testWidgets('Verify table header style is applied to first row', (tester) async {
+      await tester.pumpWidget(const TableTestApp(
+        initialDelta: [
+          {'insert': 'Header Cell A'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': 'Header Cell B'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': 'Regular Cell A'},
+          {'insert': '\n', 'attributes': {'table': 'row-2'}},
+          {'insert': 'Regular Cell B'},
+          {'insert': '\n', 'attributes': {'table': 'row-2'}},
+          {'insert': '\n'},
+        ],
+      ));
+
+      // Find the text widgets for header and regular cells
+      final findHeaderCellA = find.text('Header Cell A', findRichText: true);
+      final findHeaderCellB = find.text('Header Cell B', findRichText: true);
+      final findRegularCellA = find.text('Regular Cell A', findRichText: true);
+      final findRegularCellB = find.text('Regular Cell B', findRichText: true);
+
+      // Get the rich text widgets to check their styles
+      final headerARichText = tester.widget<RichText>(findHeaderCellA);
+      final headerBRichText = tester.widget<RichText>(findHeaderCellB);
+      final regularARichText = tester.widget<RichText>(findRegularCellA);
+      final regularBRichText = tester.widget<RichText>(findRegularCellB);
+
+      // Check that header cells have bold styling (our custom header style)
+      expect(headerARichText.text.style?.fontWeight, equals(FontWeight.bold),
+        reason: 'Header A should be bold');
+      expect(headerBRichText.text.style?.fontWeight, equals(FontWeight.bold),
+        reason: 'Header B should be bold');
+
+      // The regular cells should not have bold styling
+      expect(regularARichText.text.style?.fontWeight, isNot(equals(FontWeight.bold)),
+        reason: 'Regular A should not be bold');
+      expect(regularBRichText.text.style?.fontWeight, isNot(equals(FontWeight.bold)),
+        reason: 'Regular B should not be bold');
     });
   });
 }
 
 class TableTestApp extends StatelessWidget {
-  const TableTestApp({super.key});
+  const TableTestApp({
+    super.key,
+    this.initialDelta = const [{'insert': '\n'}],
+  });
+
+  final List<dynamic> initialDelta;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: const Text('Table Test')),
-        body: const TableTestWidget(),
+        body: TableTestWidget(initialDelta: initialDelta),
       ),
     );
   }
 }
 
 class TableTestWidget extends StatefulWidget {
-  const TableTestWidget({super.key});
+  const TableTestWidget({
+    super.key,
+    this.initialDelta = const [{'insert': '\n'}],
+  });
+
+  final List<dynamic> initialDelta;
 
   @override
   State<TableTestWidget> createState() => _TableTestWidgetState();
 }
 
 class _TableTestWidgetState extends State<TableTestWidget> {
-  late QuillController controller;
+  late final QuillController controller;
 
   @override
   void initState() {
     super.initState();
 
-    final doc = Document.fromJson([
-      {
-        'insert': 'This is a test with a table block below:\n',
-      },
-      {
-        'insert': 'Cell A',
-      },
-      {
-        'insert': '\n',
-        'attributes': {'table': '1'},
-      },
-      {
-        'insert': 'Cell B',
-      },
-      {
-        'insert': '\n',
-        'attributes': {'table': '1'},
-      },
-      {
-        'insert': 'End of test',
-      },
-      {
-        'insert': '\n',
-      },
-    ]);
+    final doc = Document.fromJson(widget.initialDelta);
 
     controller = QuillController(
       document: doc,
@@ -87,14 +171,19 @@ class _TableTestWidgetState extends State<TableTestWidget> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          const Text(
-            'Testing table support',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
           Expanded(
             child: QuillEditor.basic(
               controller: controller,
+              config: QuillEditorConfig(
+                customStyles: DefaultStyles(
+                  table: DefaultTableStyle(
+                    border: TableBorder.all(),
+                    cellPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    stripeColor: Colors.grey.shade400,
+                    headerStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
             ),
           ),
         ],

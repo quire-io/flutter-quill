@@ -212,23 +212,49 @@ class DefaultListBlockStyle extends DefaultTextBlockStyle {
   }
 }
 
+/// Style configuration for table rendering.
+///
+/// Example usage with custom stripe color:
+/// ```dart
+/// const tableStyle = DefaultTableStyle(
+///   border: TableBorder.all(color: Colors.grey),
+///   cellPadding: EdgeInsets.all(8),
+///   stripeColor: Colors.grey.withValues(alpha: 0.1),
+/// );
+/// ```
 @immutable
 class DefaultTableStyle {
   const DefaultTableStyle({
-    this.border,
+    this.border = const TableBorder(),
     this.cellPadding = const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    this.stripeColor,
+    this.headerStyle,
   });
 
-  final TableBorder? border;
-  final EdgeInsets? cellPadding;
+  /// Border configuration for the table.
+  final TableBorder border;
+
+  /// Padding applied to each table cell.
+  final EdgeInsets cellPadding;
+
+  /// Background color for striped rows. If null, no striping is applied.
+  /// Even-numbered rows (2nd, 4th, 6th...) will use this color, excluding the header row.
+  final Color? stripeColor;
+
+  /// Text style for the first table row (header row).
+  final TextStyle? headerStyle;
 
   DefaultTableStyle copyWith({
     TableBorder? border,
     EdgeInsets? cellPadding,
+    Color? stripeColor,
+    TextStyle? headerStyle,
   }) {
     return DefaultTableStyle(
       border: border ?? this.border,
       cellPadding: cellPadding ?? this.cellPadding,
+      stripeColor: stripeColor ?? this.stripeColor,
+      headerStyle: headerStyle ?? this.headerStyle,
     );
   }
 }
