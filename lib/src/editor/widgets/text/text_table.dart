@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../../controller/quill_controller.dart';
 import '../../../document/attribute.dart';
 import '../../../document/nodes/block.dart';
 import '../../editor.dart';
