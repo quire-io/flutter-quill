@@ -109,6 +109,63 @@ void main() {
       expect(regularBRichText.text.style?.fontWeight, isNot(equals(FontWeight.bold)),
         reason: 'Regular B should not be bold');
     });
+
+    testWidgets('Debug childAtOffset method', (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson([
+          {'insert': 'Cell A'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': 'Cell B'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+          {'insert': 'Cell C'},
+          {'insert': '\n', 'attributes': {'table': 'row-1'}},
+        ]),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: QuillEditor.basic(
+            controller: controller,
+            config: const QuillEditorConfig(
+              autoFocus: false,
+            ),
+          ),
+        ),
+      ));
+
+      await tester.pumpAndSettle();
+
+       // Find the table cells
+      final cellAFinder = find.text('Cell A', findRichText: true);
+      final cellBFinder = find.text('Cell B', findRichText: true);
+      final cellCFinder = find.text('Cell C', findRichText: true);
+
+      expect(cellAFinder, findsOneWidget);
+      expect(cellBFinder, findsOneWidget);
+      expect(cellCFinder, findsOneWidget);
+
+      // Tap on Cell A
+      await tester.tap(cellAFinder);
+      await tester.pumpAndSettle(const Duration(milliseconds: 350));
+
+      // Check if cursor is in Cell A (offset 0-6)
+      expect(controller.selection.baseOffset, lessThanOrEqualTo(6)); // Cell A content + newline
+
+      // Tap on Cell B
+      await tester.tap(cellBFinder);
+      await tester.pumpAndSettle(const Duration(milliseconds: 350));
+
+      // Check if cursor moved to Cell B (offset should be around 7-13)
+      expect(controller.selection.baseOffset, greaterThanOrEqualTo(7));
+      expect(controller.selection.baseOffset, lessThanOrEqualTo(13));
+
+      // Tap on Cell C
+      await tester.tap(cellCFinder);
+      await tester.pumpAndSettle(const Duration(milliseconds: 350));
+
+      // Check if cursor moved to Cell C (offset should be around 14-20)
+      expect(controller.selection.baseOffset, greaterThanOrEqualTo(14));
+    });
   });
 }
 
@@ -155,7 +212,6 @@ class _TableTestWidgetState extends State<TableTestWidget> {
     controller = QuillController(
       document: doc,
       selection: const TextSelection.collapsed(offset: 0),
-      readOnly: true, // Make it read-only for this test
     );
   }
 

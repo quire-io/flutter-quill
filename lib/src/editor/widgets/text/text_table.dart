@@ -547,6 +547,34 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     return defaultHitTestChildren(result, position: position);
   }
 
+  /// Override childAtOffset to handle horizontal table layout instead of vertical.
+  ///
+  /// The base class [RenderEditableContainerBox.childAtOffset] assumes children
+  /// are laid out vertically, but table cells are laid out horizontally.
+  @override
+  RenderEditableBox childAtOffset(Offset offset) {
+    assert(firstChild != null);
+
+    if (childCount == 0) {
+      return firstChild!;
+    }
+
+    // For horizontal layout, we need to check the x-coordinate
+    // Calculate cell width by evenly dividing available width
+    final cellWidth = size.width / childCount;
+
+    // Determine which cell the offset falls into
+    final cellIndex = (offset.dx / cellWidth).floor().clamp(0, childCount - 1);
+
+    // Find the child at the calculated index
+    var child = firstChild;
+    for (var i = 0; i < cellIndex && child != null; i++) {
+      child = childAfter(child);
+    }
+
+    return child ?? lastChild!;
+  }
+
   @override
   Rect getLocalRectForCaret(TextPosition position) {
     final child = childAtPosition(position);
