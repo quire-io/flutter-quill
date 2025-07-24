@@ -17,7 +17,6 @@ import 'text_selection.dart';
 class EditableTextTable extends MultiChildRenderObjectWidget {
   const EditableTextTable({
     required this.block,
-    required this.controller,
     required this.textDirection,
     required this.tableStyle,
     super.key,
@@ -25,7 +24,6 @@ class EditableTextTable extends MultiChildRenderObjectWidget {
   });
 
   final Block block;
-  final QuillController controller;
   final TextDirection textDirection;
   final DefaultTableStyle tableStyle;
 

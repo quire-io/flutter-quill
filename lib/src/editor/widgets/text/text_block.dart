@@ -121,6 +121,21 @@ class EditableTextBlock extends StatelessWidget {
     assert(debugCheckHasMediaQuery(context));
 
     final defaultStyles = QuillStyles.getStyles(context, false);
+
+    // Potix: use EditableTextTable for render table block
+    if (block.style.attributes.containsKey(Attribute.table.key)) {
+      return EditableTextTable(
+        block: block,
+        textDirection: textDirection,
+        tableStyle: defaultStyles?.table ?? const DefaultTableStyle(),
+        children: _buildChildren(
+          context,
+          indentLevelCounts,
+          clearIndents,
+        ),
+      );
+    }
+
     return _EditableBlock(
       block: block,
       textDirection: textDirection,
@@ -211,21 +226,6 @@ class EditableTextBlock extends StatelessWidget {
         ),
       );
     }
-
-    // Potix: wrap with the Table using EditableTextTable
-    final isTable = block.style.attributes.containsKey(Attribute.table.key);
-    if (isTable) {
-      return [
-        EditableTextTable(
-          block: block,
-          controller: controller,
-          textDirection: textDirection,
-          tableStyle: defaultStyles?.table ?? const DefaultTableStyle(),
-          children: children,
-        ),
-      ];
-    }
-
     return children.toList(growable: false);
   }
 
