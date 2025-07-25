@@ -1,4 +1,5 @@
 import '../../../../quill_delta.dart';
+import '../attribute.dart';
 import 'container.dart';
 import 'line.dart';
 import 'node.dart';
@@ -44,9 +45,14 @@ base class Block extends QuillContainer<Line?> {
     var block = this;
     final prev = block.previous;
     // merging it with previous block if style is the same
+    // or if both blocks have table attributes with the same value
     if (!block.isFirst &&
         block.previous is Block &&
-        prev!.style == block.style) {
+        (prev!.style == block.style ||
+         (block.style.attributes.containsKey(Attribute.table.key) &&
+          prev.style.attributes.containsKey(Attribute.table.key) &&
+          block.style.attributes[Attribute.table.key]?.value ==
+          prev.style.attributes[Attribute.table.key]?.value))) {
       block
         ..moveChildToNewParent(prev as QuillContainer<Node?>?)
         ..unlink();
@@ -54,7 +60,14 @@ base class Block extends QuillContainer<Line?> {
     }
     final next = block.next;
     // merging it with next block if style is the same
-    if (!block.isLast && block.next is Block && next!.style == block.style) {
+    // or if both blocks have table attributes with the same value
+    if (!block.isLast &&
+        block.next is Block &&
+        (next!.style == block.style ||
+         (block.style.attributes.containsKey(Attribute.table.key) &&
+          next.style.attributes.containsKey(Attribute.table.key) &&
+          block.style.attributes[Attribute.table.key]?.value ==
+          next.style.attributes[Attribute.table.key]?.value))) {
       (next as Block).moveChildToNewParent(block);
       next.unlink();
     }
