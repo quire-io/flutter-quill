@@ -23,3 +23,14 @@ class LineHeightAttribute extends Attribute<double?> {
   static const Attribute<double?> lineHeightDouble =
       LineHeightAttribute(lineHeight: 2);
 }
+
+/// A Quire custom block attribute for nested blockquotes.
+class NestedBlockquoteAttribute extends Attribute<int?> {
+  const NestedBlockquoteAttribute({int? level})
+      : super('nested-blockquote', AttributeScope.block, level);
+}
+
+/// A Quire custom block attribute for soft line breaks.
+class LineAttribute extends Attribute<bool> {
+  const LineAttribute() : super('line', AttributeScope.block, true);
+}

@@ -57,6 +57,8 @@ class Attribute<T> {
     Attribute.image.key: Attribute.image,
     Attribute.video.key: Attribute.video,
     Attribute.table.key: Attribute.table,
+    Attribute.nestedBlockquote.key: Attribute.nestedBlockquote,
+    Attribute.line.key: Attribute.line,
   });
 
   static const BoldAttribute bold = BoldAttribute();
@@ -121,6 +123,8 @@ class Attribute<T> {
 
   static const TableAttribute table = TableAttribute(null);
 
+  static const LineAttribute line = LineAttribute();
+
   static final registeredAttributeKeys = Set.unmodifiable(_registry.keys);
 
   static final inlineKeys = Set.unmodifiable(<String>{
@@ -157,7 +161,8 @@ class Attribute<T> {
     Attribute.direction.key,
     Attribute.lineHeight.key,
     Attribute.table.key,
-    'nested-blockquote', // Potix:
+    Attribute.nestedBlockquote.key, // Potix:
+    Attribute.line.key, // Potix:
   });
 
   static final Set<String> blockKeysExceptHeader = LinkedHashSet.of({
@@ -169,7 +174,8 @@ class Attribute<T> {
     Attribute.indent.key,
     Attribute.direction.key,
     Attribute.table.key,
-    'nested-blockquote', // Potix:
+    Attribute.nestedBlockquote.key, // Potix:
+    Attribute.line.key, // Potix:
   });
 
   static final Set<String> exclusiveBlockKeys = LinkedHashSet.of({
@@ -177,7 +183,8 @@ class Attribute<T> {
     Attribute.list.key,
     Attribute.codeBlock.key,
     Attribute.blockQuote.key,
-    'nested-blockquote', // Potix:
+    Attribute.nestedBlockquote.key, // Potix:
+    Attribute.line.key, // Potix:
   });
 
   static final Set<String> embedKeys = {
@@ -238,6 +245,9 @@ class Attribute<T> {
 
   // "attributes":{"indent":3"}
   static const Attribute<int?> indentL3 = IndentAttribute(level: 3);
+
+  // "attributes":{"nested-blockquote":1}
+  static const Attribute<int?> nestedBlockquote = NestedBlockquoteAttribute(level: 1);
 
   static Attribute<int?> getIndentLevel(int? level) {
     if (level == 1) {
