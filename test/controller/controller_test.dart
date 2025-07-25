@@ -341,6 +341,9 @@ void main() {
             'indent' => Attribute.indentL2,
             'direction' => Attribute.rtl,
             'line-height' => LineHeightAttribute.lineHeightNormal,
+            'table' => const TableAttribute('row-1'),
+            'nested-blockquote' => Attribute.nestedBlockquote,
+            'line' => Attribute.line,
             String() => throw UnimplementedError(key)
           };
 

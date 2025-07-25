@@ -261,6 +261,12 @@ class QuillController extends ChangeNotifier {
   /// clear editor
   void clear() {
     // Potix: use Delta to reset the document
+
+    // Ensure selection is at a safe position before document changes to prevent race conditions
+    if (!selection.isCollapsed || selection.start > 0) {
+      _updateSelection(const TextSelection.collapsed(offset: 0));
+    }
+
     compose(
       Delta()..delete(document.length)..insert('\n'),
       const TextSelection.collapsed(offset: 0),
