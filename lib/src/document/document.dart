@@ -92,7 +92,9 @@ class Document {
 
     final delta = _rules.apply(RuleType.insert, this, index,
         data: data, len: replaceLength);
-    compose(delta, ChangeSource.local);
+    if (delta.isNotEmpty) {
+      compose(delta, ChangeSource.local);
+    }
     return delta;
   }
 
