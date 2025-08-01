@@ -604,9 +604,7 @@ class QuillRawEditorState extends EditorState
           styles: _styles,
           enableInteractiveSelection: widget.config.enableInteractiveSelection,
           hasFocus: _hasFocus,
-          contentPadding: attrs.containsKey(Attribute.codeBlock.key)
-              ? const EdgeInsets.all(16)
-              : null,
+          contentPadding: _getContentPaddingForBlock(node, _styles),
           embedBuilder: widget.config.embedBuilder,
           textSpanBuilder: widget.config.textSpanBuilder,
           linkActionPicker: _linkActionPicker,
@@ -774,6 +772,17 @@ class QuillRawEditorState extends EditorState
     }
     // Potix:
     return defaultStyles!.unknownBlock!(attrs)?.verticalSpacing ?? VerticalSpacing.zero;
+  }
+
+  EdgeInsets? _getContentPaddingForBlock(
+      Block node, DefaultStyles? defaultStyles) {
+    final attrs = node.style.attributes;
+    if (attrs.containsKey(Attribute.codeBlock.key)) {
+      return const EdgeInsets.all(16);
+    } else if (attrs.containsKey(Attribute.blockQuote.key)) {
+      return const EdgeInsets.symmetric(vertical: 8);
+    }
+    return null;
   }
 
   Decoration? _getDecoration(Node node, DefaultStyles? defaultStyles,
