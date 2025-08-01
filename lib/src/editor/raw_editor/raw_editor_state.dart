@@ -779,7 +779,7 @@ class QuillRawEditorState extends EditorState
     final attrs = node.style.attributes;
     if (attrs.containsKey(Attribute.codeBlock.key)) {
       return const EdgeInsets.all(16);
-    } else if (attrs.containsKey(Attribute.blockQuote.key)) {
+    } else if (attrs.containsKey(Attribute.blockQuote.key) || attrs.containsKey(Attribute.nestedBlockquote.key)) {
       return const EdgeInsets.symmetric(vertical: 8);
     }
     return null;
