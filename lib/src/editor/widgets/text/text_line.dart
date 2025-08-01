@@ -1393,7 +1393,8 @@ class RenderEditableTextLine extends RenderEditableBox {
       final parentData = _body!.parentData as BoxParentData;
       final effectiveOffset = offset + parentData.offset;
 
-      if (inlineCodeStyle.backgroundColor != null) {
+      // Paint inline code backgrounds and borders before painting text
+      if (inlineCodeStyle.backgroundColor != null || inlineCodeStyle.borderSide != null) {
         for (final item in line.children) {
           if (item is! leaf.QuillText ||
               !item.style.containsKey(Attribute.inlineCode.key)) {
@@ -1404,26 +1405,48 @@ class RenderEditableTextLine extends RenderEditableBox {
             extentOffset: item.offset + item.length,
           );
           final rects = _body!.getBoxesForSelection(textRange);
-          final paint = Paint()..color = inlineCodeStyle.backgroundColor!;
+
           for (final box in rects) {
-            final rect = box.toRect().translate(0, 1).shift(effectiveOffset);
-            if (inlineCodeStyle.radius == null) {
-              final paintRect = Rect.fromLTRB(
-                rect.left - 2,
-                rect.top,
-                rect.right + 2,
-                rect.bottom,
-              );
-              context.canvas.drawRect(paintRect, paint);
-            } else {
-              final paintRect = RRect.fromLTRBR(
-                rect.left - 2,
-                rect.top,
-                rect.right + 2,
-                rect.bottom,
-                inlineCodeStyle.radius!,
-              );
-              context.canvas.drawRRect(paintRect, paint);
+            // Get the exact text bounds to avoid overlap with adjacent text
+            final rect = box.toRect().shift(effectiveOffset);
+
+            // Paint background if specified
+            if (inlineCodeStyle.backgroundColor != null) {
+              final backgroundPaint = Paint()..color = inlineCodeStyle.backgroundColor!;
+
+              if (inlineCodeStyle.radius == null) {
+                context.canvas.drawRect(rect, backgroundPaint);
+              } else {
+                final backgroundRect = RRect.fromLTRBR(
+                  rect.left,
+                  rect.top,
+                  rect.right,
+                  rect.bottom,
+                  inlineCodeStyle.radius!,
+                );
+                context.canvas.drawRRect(backgroundRect, backgroundPaint);
+              }
+            }
+
+            // Paint border if specified
+            if (inlineCodeStyle.borderSide != null) {
+              final borderPaint = Paint()
+                ..color = inlineCodeStyle.borderSide!.color
+                ..strokeWidth = inlineCodeStyle.borderSide!.width
+                ..style = PaintingStyle.stroke;
+
+              if (inlineCodeStyle.radius == null) {
+                context.canvas.drawRect(rect, borderPaint);
+              } else {
+                final borderRect = RRect.fromLTRBR(
+                  rect.left,
+                  rect.top,
+                  rect.right,
+                  rect.bottom,
+                  inlineCodeStyle.radius!,
+                );
+                context.canvas.drawRRect(borderRect, borderPaint);
+              }
             }
           }
         }

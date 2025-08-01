@@ -92,6 +92,7 @@ class InlineCodeStyle {
     this.header6,
     this.backgroundColor,
     this.radius,
+    this.borderSide,
   });
 
   /// Base text style for an inline code.
@@ -120,6 +121,9 @@ class InlineCodeStyle {
 
   /// Radius used when paining the background.
   final Radius? radius;
+
+  /// Border configuration for inline code.
+  final BorderSide? borderSide;
 
   /// Returns effective style to use for inline code for the specified
   /// [lineStyle].
@@ -161,12 +165,13 @@ class InlineCodeStyle {
         other.header5 == header5 &&
         other.header6 == header6 &&
         other.backgroundColor == backgroundColor &&
-        other.radius == radius;
+        other.radius == radius &&
+        other.borderSide == borderSide;
   }
 
   @override
   int get hashCode => Object.hash(style, header1, header2, header3, header4,
-      header5, header6, backgroundColor, radius);
+      header5, header6, backgroundColor, radius, borderSide);
 }
 
 @immutable
