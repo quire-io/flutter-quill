@@ -1,4 +1,5 @@
 import 'dart:async' show StreamController;
+import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
 
@@ -197,10 +198,11 @@ class Document {
       return (res.node as Line).collectStyle(res.offset, len);
     }
     //
-    if (res.offset == 0) {
-      final current = (res.node as Line).collectStyle(0, 0);
+    final currentLine = res.node as Line;
+    if (currentLine.isEmpty && res.offset == 0) {
+      final current = currentLine.collectStyle(0, 0);
       //
-      while ((res.node as Line).length == 1 && index > 0) {
+      while ((res.node as Line).isEmpty && index > 0) {
         res = queryChild(--index);
       }
       // Get inline attributes from previous line (link does not cross line breaks)
@@ -222,7 +224,7 @@ class Document {
       return Style.attr(attributes);
     }
     //
-    final style = (res.node as Line).collectStyle(res.offset - 1, 0);
+    final style = (res.node as Line).collectStyle(math.max(res.offset - 1, 0), 0);
     final linkAttribute = style.attributes[Attribute.link.key];
     if (linkAttribute != null) {
       if ((res.node!.length - 1 == res.offset) ||
