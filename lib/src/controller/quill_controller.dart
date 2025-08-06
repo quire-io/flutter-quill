@@ -482,7 +482,7 @@ class QuillController extends ChangeNotifier {
       if (insertNewline && selection.start > 0) {
         final style = document.collectStyle(selection.start - 1, 0);
         final ignoredStyles = style.attributes.values.where(
-          (s) => !s.isInline || s.key == Attribute.link.key,
+          (s) => !s.isInline || Attribute.inlineKeysNotKeptOnNewLine.contains(s.key),
         );
         toggledStyle = style.removeAll(ignoredStyles.toSet());
       } else {

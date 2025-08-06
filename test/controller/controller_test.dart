@@ -383,5 +383,39 @@ void main() {
             reason: 'line 1 extends into line3 which is not block');
       }
     });
+
+    test('New empty line should not inherit some inline styles', () {
+      final testController = QuillController(
+        document: Document(),
+        selection: const TextSelection.collapsed(offset: 0),
+      )
+
+      // Insert some text and make it code
+
+      ..replaceText(0, 0, 'Hello', null)
+      ..formatTextStyle(0, 5, Style.attr({
+        Attribute.inlineCode.key: Attribute.inlineCode,
+        }))
+      ..updateSelection(
+        const TextSelection.collapsed(offset: 5),
+        ChangeSource.local,
+      )
+      ..replaceText(5, 0, '\n', null)
+
+      // Now at the beginning of new line, insert a character
+      ..updateSelection(
+        const TextSelection.collapsed(offset: 6),
+        ChangeSource.local,
+      )
+      ..replaceText(6, 0, 'a', null);
+
+      // Verify the typed character has bold style
+      final newCharacterStyle = testController.document.collectStyle(6, 1);
+      expect(
+        newCharacterStyle.attributes,
+        isNot(contains(Attribute.inlineCode.key)),
+        reason: 'New character should NOT have inline code style',
+      );
+    });
   });
 }

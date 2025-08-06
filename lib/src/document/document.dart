@@ -209,8 +209,8 @@ class Document {
       final prev = (res.node as Line).collectStyle(res.offset, 0);
       final attributes = <String, Attribute>{};
       for (final attr in prev.attributes.values) {
-        if (attr.scope == AttributeScope.inline &&
-            attr.key != Attribute.link.key) {
+        if (attr.scope == AttributeScope.inline
+            && !Attribute.inlineKeysNotKeptOnNewLine.contains(attr.key)) {
           attributes[attr.key] = attr;
         }
       }

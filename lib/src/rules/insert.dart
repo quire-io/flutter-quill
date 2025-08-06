@@ -557,6 +557,7 @@ class PreserveInlineStylesRule extends InsertRule {
     len ??= 0;
     var prev = itr.skip(len == 0 ? index : index + 1);
     var excludeLink = false;
+    var emptyLine = false;
 
     /// Process simple insertions at start of line
     if (len == 0) {
@@ -579,6 +580,7 @@ class PreserveInlineStylesRule extends InsertRule {
               currLine.data is String ? currLine.data as String : null;
           if (currData?.startsWith('\n') == true) {
             if (prevData.trimRight().isEmpty) {
+              emptyLine = true;
               final back =
                   DeltaIterator(documentDelta).skip(index - prevData.length);
 
@@ -611,6 +613,9 @@ class PreserveInlineStylesRule extends InsertRule {
 
     if (excludeLink) {
       attributes.remove(Attribute.link.key);
+    }
+    if (emptyLine) {
+      attributes.removeWhere((key, _) => Attribute.inlineKeysNotKeptOnNewLine.contains(key));
     }
     return Delta()
       ..retain(index + len)

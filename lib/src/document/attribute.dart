@@ -144,6 +144,11 @@ class Attribute<T> {
     Attribute.inlineCode.key,
   });
 
+  static final inlineKeysNotKeptOnNewLine = Set.unmodifiable(<String>{
+    Attribute.link.key,
+    Attribute.inlineCode.key, // Potix: our spec
+  });
+
   static final ignoreKeys = Set.unmodifiable(<String>{
     Attribute.width.key,
     Attribute.height.key,
