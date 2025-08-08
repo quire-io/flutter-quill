@@ -37,6 +37,8 @@ class QuillEditorConfig {
     this.placeholder,
     this.checkBoxReadOnly,
     this.disableClipboard = false,
+    this.smartDashesType,
+    this.smartQuotesType,
     this.textSelectionThemeData,
     this.showCursor,
     this.paintCursorAboveText,
@@ -445,6 +447,10 @@ class QuillEditorConfig {
   /// editorKey.currentState?.renderEditor.getLocalRectForCaret
   final GlobalKey<EditorState>? editorKey;
 
+  final SmartDashesType? smartDashesType;
+
+  final SmartQuotesType? smartQuotesType;
+
   /// By default we will use
   /// ```
   /// TextSelectionTheme.of(context)
@@ -489,6 +495,8 @@ class QuillEditorConfig {
     bool? onTapOutsideEnabled,
     Function(PointerDownEvent event, FocusNode focusNode)? onTapOutside,
     KeyEventResult? Function(KeyEvent event, Node? node)? onKeyPressed,
+    SmartDashesType? smartDashesType,
+    SmartQuotesType? smartQuotesType,
     bool? showCursor,
     bool? paintCursorAboveText,
     MouseCursor? readOnlyMouseCursor,
@@ -564,6 +572,8 @@ class QuillEditorConfig {
       expands: expands ?? this.expands,
       textCapitalization: textCapitalization ?? this.textCapitalization,
       keyboardAppearance: keyboardAppearance ?? this.keyboardAppearance,
+      smartDashesType: smartDashesType ?? this.smartDashesType,
+      smartQuotesType: smartQuotesType ?? this.smartQuotesType,
       scrollPhysics: scrollPhysics ?? this.scrollPhysics,
       onLaunchUrl: onLaunchUrl ?? this.onLaunchUrl,
       onTapUp: onTapUp ?? this.onTapUp,

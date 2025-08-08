@@ -272,6 +272,8 @@ class QuillEditorState extends State<QuillEditor>
         focusNode: widget.focusNode,
         scrollController: widget.scrollController,
         scrollable: config.scrollable,
+        smartDashesType: widget.config.smartDashesType,
+        smartQuotesType: widget.config.smartQuotesType,
         enableAlwaysIndentOnTab: config.enableAlwaysIndentOnTab,
         scrollBottomInset: config.scrollBottomInset,
         padding: config.padding,

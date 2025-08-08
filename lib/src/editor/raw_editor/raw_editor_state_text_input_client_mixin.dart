@@ -82,6 +82,8 @@ mixin RawEditorStateTextInputClientMixin on EditorState
         TextInputConfiguration(
           inputType: TextInputType.multiline,
           readOnly: widget.config.readOnly,
+          smartDashesType: widget.config.smartDashesType,
+          smartQuotesType: widget.config.smartQuotesType,
           inputAction: widget.config.textInputAction,
           enableSuggestions: !widget.config.readOnly,
           keyboardAppearance: createKeyboardAppearance(),

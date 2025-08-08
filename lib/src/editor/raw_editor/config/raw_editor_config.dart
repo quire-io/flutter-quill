@@ -34,6 +34,8 @@ class QuillRawEditorConfig {
     @experimental this.onKeyPressed,
     this.showCursor = true,
     this.scrollable = true,
+    this.smartDashesType,
+    this.smartQuotesType,
     this.padding = EdgeInsets.zero,
     this.readOnly = false,
     this.checkBoxReadOnly,
@@ -302,6 +304,10 @@ class QuillRawEditorConfig {
 
   /// The color to use when painting the selection.
   final Color selectionColor;
+
+  final SmartDashesType? smartDashesType;
+
+  final SmartQuotesType? smartQuotesType;
 
   /// Delegate for building the text selection handles and toolbar.
   ///
