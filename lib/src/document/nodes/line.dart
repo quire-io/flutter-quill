@@ -26,11 +26,15 @@ base class Line extends QuillContainer<Leaf?> {
   Leaf get defaultChild => QuillText();
 
   @override
-  int get length => super.length + 1;
+  int get length => super.length + (hasDivider ? 0: 1);//Potix: #23007
 
   /// Returns `true` if this line contains an embedded object.
   bool get hasEmbed {
     return children.any((child) => child is Embed);
+  }
+
+  bool get hasDivider {
+    return children.any((child) => child is Embed && child.value.type == 'divider');
   }
 
   /// Returns next [Line] or `null` if this is the last line in the document.
@@ -63,7 +67,9 @@ base class Line extends QuillContainer<Leaf?> {
       final block = parent as Block;
       attributes = attributes.mergeAll(block.style);
     }
-    delta.insert('\n', attributes.toJson());
+    if (!hasDivider) {//Potix: #23007
+      delta.insert('\n', attributes.toJson());
+    }
     return delta;
   }
 
@@ -159,6 +165,14 @@ base class Line extends QuillContainer<Leaf?> {
 
   @override
   void delete(int index, int? len) {
+    if (hasDivider) {//Potix: #23007
+      super.delete(index, 1);
+      final block = parent!; // remember reference before un-linking.
+      unlink();
+      block.adjust();
+      return;
+    }
+
     final length = this.length;
     final local = math.min(length - index, len!);
     final isLFDeleted = index + local == length; // Line feed
@@ -338,6 +352,18 @@ base class Line extends QuillContainer<Leaf?> {
       final child = Leaf(data);
       add(child);
       child.format(style);
+
+      if (child is Embed && child.value.type == 'divider') {//Potix: #23007
+        _getNextLine(index).add(QuillText());
+        clearStyle();
+        if (parent is Block) {
+          _unwrap();
+        }
+        
+        var block = Block();
+        _wrap(block);
+        block.adjust();
+      }
     } else {
       final result = queryChild(index, true);
       result.node!.insert(result.offset, data, style);
