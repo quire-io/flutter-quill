@@ -85,6 +85,8 @@ int getPositionDelta(Delta user, Delta actual) {
       continue;
     } else if (userOperation.isInsert && actualOperation.isRetain) {
       diff -= userOperation.length!;
+    } else if (userOperation.isInsert && actualOperation.isDelete) {
+      diff -= userOperation.length! + actualOperation.length!;
     } else if (userOperation.isDelete && actualOperation.isRetain) {
       diff += userOperation.length!;
     } else if (userOperation.isRetain && actualOperation.isInsert) {
