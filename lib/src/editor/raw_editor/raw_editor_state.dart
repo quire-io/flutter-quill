@@ -853,9 +853,22 @@ class QuillRawEditorState extends EditorState
           _keyboardVisible = _keyboardVisibilityController!.isVisible;
           _keyboardVisibilitySubscription =
               _keyboardVisibilityController?.onChange.listen((visible) {
+            final keyboardAlreadyShown = _keyboardVisible;
             _keyboardVisible = visible;
             if (visible) {
-              _onChangeTextEditingValue(!_hasFocus);
+              if (!keyboardAlreadyShown) {
+                /// delay 500 milliseconds for waiting keyboard show up
+                Future.delayed(
+                  const Duration(milliseconds: 500),
+                  () {
+                    if (mounted && _keyboardVisible) {
+                      _onChangeTextEditingValue(!_hasFocus);
+                    }
+                  },
+                );
+              } else {
+                _onChangeTextEditingValue(!_hasFocus);
+              }
             }
           });
 
