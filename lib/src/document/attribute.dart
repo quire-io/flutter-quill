@@ -239,6 +239,9 @@ class Attribute<T> {
   // "attributes":{"list":"unchecked"}
   static const Attribute<String?> unchecked = ListAttribute('unchecked');
 
+  // "attributes":{"list":"dash"}
+  static const Attribute<String?> dash = ListAttribute('dash');
+
   // "attributes":{"direction":"rtl"}
   static const Attribute<String?> rtl = DirectionAttribute('rtl');
 

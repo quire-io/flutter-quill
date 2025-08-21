@@ -7,6 +7,7 @@ class QuillBulletPoint extends StatelessWidget {
     this.padding = 0,
     this.backgroundColor,
     this.textAlign,
+    this.isDash = false,
     super.key,
   });
 
@@ -15,6 +16,7 @@ class QuillBulletPoint extends StatelessWidget {
   final double padding;
   final Color? backgroundColor;
   final TextAlign? textAlign;
+  final bool isDash;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,7 @@ class QuillBulletPoint extends StatelessWidget {
       padding: EdgeInsetsDirectional.only(end: padding),
       color: backgroundColor,
       child: Text(
-        '•',
+        isDash ? '–' : '•',
         style: style,
         textAlign: textAlign,
       ),

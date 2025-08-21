@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../../raw_editor/builders/leading_block_builder.dart';
 import '../../style_widgets/style_widgets.dart';
 
-Widget bulletPointLeading(LeadingConfig config) => QuillBulletPoint(
+Widget bulletPointLeading(LeadingConfig config, {bool isDash = false}) => QuillBulletPoint(
       style: config.style!,
       width: config.width!,
       padding: config.padding!,
+      isDash: isDash,
     );

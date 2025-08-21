@@ -270,7 +270,8 @@ class EditableTextBlock extends StatelessWidget {
     //     : null;
     final attribute =
         attrs[Attribute.list.key] ?? attrs[Attribute.codeBlock.key];
-    final isUnordered = attribute == Attribute.ul;
+    final isDash = attribute == Attribute.dash;
+    final isUnordered = isDash || attribute == Attribute.ul;
     final isOrdered = attribute == Attribute.ol;
     final isCheck =
         attribute == Attribute.checked || attribute == Attribute.unchecked;
@@ -344,7 +345,7 @@ class EditableTextBlock extends StatelessWidget {
     }
 
     if (isUnordered) {
-      return bulletPointLeading(leadingConfig);
+      return bulletPointLeading(leadingConfig, isDash: isDash);
     }
 
     if (isCheck) {
