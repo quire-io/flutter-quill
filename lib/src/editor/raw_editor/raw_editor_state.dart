@@ -354,20 +354,23 @@ class QuillRawEditorState extends EditorState
       // is empty
       final blockAttributesWithoutContent =
           doc.root.children.firstOrNull?.toDelta().first.attributes;
-      // check if it has code block attribute to add '//' to give to the users
-      // the feeling of this is really a block of code
+      // check if it has code block attribute - don't show placeholder for code blocks
       final isCodeBlock =
           blockAttributesWithoutContent?.containsKey('code-block') ?? false;
-      // we add the block attributes at the same time as the placeholder to allow the editor to display them without removing
-      // the placeholder (this is really awkward when everything is empty)
-      final blockAttrInsertion = blockAttributesWithoutContent == null
-          ? ''
-          : ',{"insert":"\\n","attributes":${jsonEncode(blockAttributesWithoutContent)}}';
-      doc = Document.fromJson(
-        jsonDecode(
-          '[{"attributes":{"placeholder":true},"insert":"${isCodeBlock ? '// ' : ''}$raw${blockAttrInsertion.isEmpty ? '\\n' : ''}"}$blockAttrInsertion]',
-        ),
-      );
+
+      // Potix: Don't show placeholder if it's a code block
+      if (!isCodeBlock) {
+        // we add the block attributes at the same time as the placeholder to allow the editor to display them without removing
+        // the placeholder (this is really awkward when everything is empty)
+        final blockAttrInsertion = blockAttributesWithoutContent == null
+            ? ''
+            : ',{"insert":"\\n","attributes":${jsonEncode(blockAttributesWithoutContent)}}';
+        doc = Document.fromJson(
+          jsonDecode(
+            '[{"attributes":{"placeholder":true},"insert":"$raw${blockAttrInsertion.isEmpty ? '\\n' : ''}"}$blockAttrInsertion]',
+          ),
+        );
+      }
     }
 
     if (!widget.config.disableClipboard) {
