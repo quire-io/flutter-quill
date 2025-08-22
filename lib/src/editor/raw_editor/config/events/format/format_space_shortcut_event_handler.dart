@@ -5,6 +5,7 @@ import '../../../../../document/document.dart';
 enum BlockFormatStyle {
   todo,
   bullet,
+  dash,
   ordered,
   header,
 }
@@ -21,6 +22,9 @@ bool handleFormatBlockStyleBySpaceEvent({
     return true;
   } else if (formatStyle == BlockFormatStyle.bullet) {
     _updateSelectionForKeyPhrase(character, Attribute.ul, controller);
+    return true;
+  } else if (formatStyle == BlockFormatStyle.dash) {
+    _updateSelectionForKeyPhrase(character, Attribute.dash, controller);
     return true;
   } else if (formatStyle == BlockFormatStyle.ordered) {
     _updateSelectionForKeyPhrase(character, Attribute.ol, controller);
