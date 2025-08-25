@@ -4,9 +4,11 @@ import '../../../../../document/document.dart';
 
 enum BlockFormatStyle {
   todo,
+  checked,
   bullet,
   dash,
   ordered,
+  blockQuote,
   header,
 }
 
@@ -20,6 +22,9 @@ bool handleFormatBlockStyleBySpaceEvent({
   if (formatStyle == BlockFormatStyle.todo) {
     _updateSelectionForKeyPhrase(character, Attribute.unchecked, controller);
     return true;
+  } if (formatStyle == BlockFormatStyle.checked) {
+    _updateSelectionForKeyPhrase(character, Attribute.checked, controller);
+    return true;
   } else if (formatStyle == BlockFormatStyle.bullet) {
     _updateSelectionForKeyPhrase(character, Attribute.ul, controller);
     return true;
@@ -28,6 +33,9 @@ bool handleFormatBlockStyleBySpaceEvent({
     return true;
   } else if (formatStyle == BlockFormatStyle.ordered) {
     _updateSelectionForKeyPhrase(character, Attribute.ol, controller);
+    return true;
+  } else if (formatStyle == BlockFormatStyle.blockQuote) {
+    _updateSelectionForKeyPhrase(character, Attribute.blockQuote, controller);
     return true;
   } else if (formatStyle == BlockFormatStyle.header) {
     var headerAttribute = Attribute.header as Attribute<int?>;
