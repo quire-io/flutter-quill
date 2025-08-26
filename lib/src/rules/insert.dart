@@ -198,10 +198,11 @@ class AutoExitBlockRule extends InsertRule {
     // This would mean we are not on the last line yet.
     // `cur.value as String` is safe since we already called isEmptyLine and
     // know it contains a newline
-    if ((cur.value as String).length > 1) {
-      // We are not on the last line of this block, ignore.
-      return null;
-    }
+    // Potix: we accept exit an empty line in the middle of a block
+    // if ((cur.value as String).length > 1) {
+    //   // We are not on the last line of this block, ignore.
+    //   return null;
+    // }
 
     // Keep looking for the next newline character to see if it shares the same
     // block style as `cur`.
