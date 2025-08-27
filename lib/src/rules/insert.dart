@@ -206,15 +206,15 @@ class AutoExitBlockRule extends InsertRule {
 
     // Keep looking for the next newline character to see if it shares the same
     // block style as `cur`.
-    final nextNewLine = _getNextNewLine(itr);
-    if (nextNewLine.operation != null &&
-        nextNewLine.operation!.attributes != null &&
-        Style.fromJson(nextNewLine.operation!.attributes)
-                .getBlockExceptHeader() ==
-            blockStyle) {
-      // We are not at the end of this block, ignore.
-      return null;
-    }
+    // final nextNewLine = _getNextNewLine(itr);
+    // if (nextNewLine.operation != null &&
+    //     nextNewLine.operation!.attributes != null &&
+    //     Style.fromJson(nextNewLine.operation!.attributes)
+    //             .getBlockExceptHeader() ==
+    //         blockStyle) {
+    //   // We are not at the end of this block, ignore.
+    //   return null;
+    // }
 
     // Here we now know that the line after `cur` is not in the same block
     // therefore we can exit this block.
