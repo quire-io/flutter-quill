@@ -882,12 +882,10 @@ class QuillRawEditorState extends EditorState
 
     controller.addListener(_didChangeTextEditingValueListener);
 
-    if (!widget.config.readOnly) {
-      // listen to composing range changes
-      composingRange.addListener(_onComposingRangeChanged);
-      // Focus
-      widget.config.focusNode.addListener(_handleFocusChanged);
-    }
+    // listen to composing range changes
+    composingRange.addListener(_onComposingRangeChanged);
+    // Focus
+    widget.config.focusNode.addListener(_handleFocusChanged);
   }
 
   // KeyboardVisibilityController only checks for keyboards that
@@ -994,10 +992,8 @@ class QuillRawEditorState extends EditorState
     _selectionOverlay?.dispose();
     _selectionOverlay = null;
     controller.removeListener(_didChangeTextEditingValueListener);
-    if (!widget.config.readOnly) {
-      widget.config.focusNode.removeListener(_handleFocusChanged);
-      composingRange.removeListener(_onComposingRangeChanged);
-    }
+    widget.config.focusNode.removeListener(_handleFocusChanged);
+    composingRange.removeListener(_onComposingRangeChanged);
     _cursorCont.dispose();
     if (_clipboardStatus != null) {
       _clipboardStatus!
@@ -1013,6 +1009,9 @@ class QuillRawEditorState extends EditorState
 
   void _onComposingRangeChanged() {
     if (!mounted) {
+      return;
+    }
+    if (widget.config.readOnly) {
       return;
     }
     _markNeedsBuild();
@@ -1117,6 +1116,9 @@ class QuillRawEditorState extends EditorState
   }
 
   void _handleFocusChanged() {
+    if (widget.config.readOnly) {
+      return;
+    }
     if (dirty) {
       requestKeyboard();
       SchedulerBinding.instance
