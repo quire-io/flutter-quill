@@ -136,11 +136,6 @@ base class Line extends QuillContainer<Leaf?> {
     final isLineFormat = (index + local == length) && local == 1;
 
     if (isLineFormat) {
-      assert(
-          style.values.every((attr) =>
-              attr.scope == AttributeScope.block ||
-              attr.scope == AttributeScope.ignore),
-          'It is not allowed to apply inline attributes to line itself.');
       _format(style);
     } else {
       // Otherwise forward to children as it's an inline format update.
@@ -198,6 +193,26 @@ base class Line extends QuillContainer<Leaf?> {
       unlink();
       block.adjust();
     }
+  }
+
+  @override
+  void applyStyle(Style value) {
+    if (value.isEmpty || value.isBlock) {
+      super.applyStyle(value);
+      return;
+    }
+
+    // Potix #23149: Filter to only include block and ignore attributes for fault tolerance
+    final validAttributes = <String, Attribute>{};
+    for (final entry in value.attributes.entries) {
+      final attr = entry.value;
+      if (attr.scope == AttributeScope.block ||
+          attr.scope == AttributeScope.ignore) {
+        validAttributes[entry.key] = attr;
+      }
+    }
+
+    super.applyStyle(Style.attr(validAttributes));
   }
 
   /// Formats this line.
