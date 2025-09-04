@@ -398,18 +398,7 @@ base class Line extends QuillContainer<Leaf?> {
       }
     }
 
-    /// Blank lines do not have style and must get the active style from prior line
-    if (isEmpty) {
-      var prevLine = previous;
-      while (prevLine is Block && prevLine.isNotEmpty) {
-        prevLine = prevLine.children.last;
-      }
-      if (prevLine is Line) {
-        result = result.mergeAll(prevLine.collectStyle(prevLine.length - 1, 1));
-      }
-    } else {
-      result = result.mergeAll(style);
-    }
+    result = result.mergeAll(style);
     if (parent is Block) {
       final block = parent as Block;
       result = result.mergeAll(block.style);

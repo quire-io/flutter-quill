@@ -30,8 +30,8 @@ void main() {
       final line2 = document.queryChild(18).node as Line;
       expect(line2.length, 1);
       expect(
-          line2.collectStyle(0, 1), const Style.attr({'bold': Attribute.bold}),
-          reason: 'Empty line gets style from previous line');
+          line2.collectStyle(0, 1), const Style(),
+          reason: 'Empty line has no style');
     });
 
     test('Block', () {
@@ -76,8 +76,21 @@ void main() {
       expect(blank.getPlainText(0, blank.length), '\n');
       expect(blank.length, 1);
       expect(blank.getPlainText(0, 1), '\n');
-      expect(blank.collectStyle(0, 1),
-          const Style.attr({'italic': Attribute.italic, 'list': orderedList}));
+      expect(blank.collectStyle(0, 1), const Style());
+    });
+
+    test('Blank line', () {
+      final delta = Delta()
+        ..insert('\n', {'header': 1})
+        ..insert('plain\n');
+      final document = Document.fromDelta(delta);
+
+      // From line
+      final blank = document.queryChild(0).node as Line;
+      expect(blank.getPlainText(0, blank.length), '\n');
+      expect(blank.length, 1);
+      expect(blank.collectStyle(0, 0), const Style.attr({'header': Attribute.h1}));
+      expect(blank.collectStyle(0, 1), const Style.attr({'header': Attribute.h1}));
     });
   });
 }
