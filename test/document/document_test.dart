@@ -288,6 +288,16 @@ void main() {
       expect(style.attributes[Attribute.header.key]?.value, 1,
           reason: 'Header level should be correct');
     });
+
+    test('Blank line', () {
+      final delta = Delta()
+        ..insert('\n', {'header': 1})
+        ..insert('plain\n');
+      final document = Document.fromDelta(delta);
+
+      expect(document.collectStyle(0, 0), const Style.attr({'header': Attribute.h1}));
+      expect(document.collectStyle(0, 1), const Style.attr({'header': Attribute.h1}));
+    });
   });
   group('cachedPlainText', () {
     late Document document;
