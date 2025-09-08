@@ -1395,61 +1395,7 @@ class RenderEditableTextLine extends RenderEditableBox {
 
       // Paint inline code backgrounds and borders before painting text
       if (inlineCodeStyle.backgroundColor != null || inlineCodeStyle.borderSide != null) {
-        for (final item in line.children) {
-          if (item is! leaf.QuillText ||
-              !item.style.containsKey(Attribute.inlineCode.key)) {
-            continue;
-          }
-          final textRange = TextSelection(
-            baseOffset: item.offset,
-            extentOffset: item.offset + item.length,
-          );
-          final rects = _body!.getBoxesForSelection(textRange);
-
-          for (final box in rects) {
-            // Get the exact text bounds to avoid overlap with adjacent text
-            final rect = box.toRect().shift(effectiveOffset);
-
-            // Paint background if specified
-            if (inlineCodeStyle.backgroundColor != null) {
-              final backgroundPaint = Paint()..color = inlineCodeStyle.backgroundColor!;
-
-              if (inlineCodeStyle.radius == null) {
-                context.canvas.drawRect(rect, backgroundPaint);
-              } else {
-                final backgroundRect = RRect.fromLTRBR(
-                  rect.left,
-                  rect.top,
-                  rect.right,
-                  rect.bottom,
-                  inlineCodeStyle.radius!,
-                );
-                context.canvas.drawRRect(backgroundRect, backgroundPaint);
-              }
-            }
-
-            // Paint border if specified
-            if (inlineCodeStyle.borderSide != null) {
-              final borderPaint = Paint()
-                ..color = inlineCodeStyle.borderSide!.color
-                ..strokeWidth = inlineCodeStyle.borderSide!.width
-                ..style = PaintingStyle.stroke;
-
-              if (inlineCodeStyle.radius == null) {
-                context.canvas.drawRect(rect, borderPaint);
-              } else {
-                final borderRect = RRect.fromLTRBR(
-                  rect.left,
-                  rect.top,
-                  rect.right,
-                  rect.bottom,
-                  inlineCodeStyle.radius!,
-                );
-                context.canvas.drawRRect(borderRect, borderPaint);
-              }
-            }
-          }
-        }
+        _paintInlineCodeBlocks(context, effectiveOffset);
       }
 
       if (hasFocus &&
@@ -1591,6 +1537,248 @@ class RenderEditableTextLine extends RenderEditableBox {
 
   @override
   Rect getCaretPrototype(TextPosition position) => _caretPrototype;
+
+  /// Paint inline code blocks with continuous multiline borders
+  void _paintInlineCodeBlocks(PaintingContext context, Offset effectiveOffset) {
+    for (final item in line.children) {
+      if (item is! leaf.QuillText ||
+          !item.style.containsKey(Attribute.inlineCode.key)) {
+        continue;
+      }
+
+      final textRange = TextSelection(
+        baseOffset: item.offset,
+        extentOffset: item.offset + item.length,
+      );
+      final rects = _body!.getBoxesForSelection(textRange);
+      if (rects.isEmpty) continue;
+
+      final processedLines = _processInlineCodeRects(rects, effectiveOffset);
+      _paintInlineCodeLines(context, processedLines);
+    }
+  }
+
+  /// Process and group inline code rectangles by line
+  List<_InlineCodeLine> _processInlineCodeRects(List<TextBox> rects, Offset effectiveOffset) {
+    // Group rectangles by line
+    final lineGroups = <double, List<Rect>>{};
+    for (final box in rects) {
+      final rect = box.toRect().shift(effectiveOffset);
+      final lineKey = rect.top;
+      lineGroups.putIfAbsent(lineKey, () => []).add(rect);
+    }
+
+    // Sort and merge rectangles for each line
+    final sortedLineEntries = lineGroups.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return sortedLineEntries.asMap().entries.map((entry) {
+      final lineIndex = entry.key;
+      final lineRects = entry.value.value;
+
+      final type = _determineLineType(
+        lineIndex: lineIndex,
+        totalLines: sortedLineEntries.length,
+      );
+
+      return _InlineCodeLine(
+        rects: _mergeAdjacentRects(lineRects),
+        type: type,
+      );
+    }).toList();
+  }
+
+  /// Determine the inline code line type based on position
+  _InlineCodeLineType _determineLineType({
+    required int lineIndex,
+    required int totalLines,
+  }) {
+    if (totalLines == 1) {
+      return _InlineCodeLineType.single;
+    } else if (lineIndex == 0) {
+      return _InlineCodeLineType.multiFirst;
+    } else if (lineIndex == totalLines - 1) {
+      return _InlineCodeLineType.multiLast;
+    } else {
+      return _InlineCodeLineType.multiMiddle;
+    }
+  }
+
+  /// Merge adjacent rectangles on the same line
+  List<Rect> _mergeAdjacentRects(List<Rect> lineRects) {
+    if (lineRects.isEmpty) return [];
+
+    lineRects.sort((a, b) => a.left.compareTo(b.left));
+
+    final mergedRects = <Rect>[];
+    Rect? currentRect;
+
+    for (final rect in lineRects) {
+      if (currentRect == null) {
+        currentRect = rect;
+      } else {
+        const tolerance = 2.0;
+        if (rect.left <= currentRect.right + tolerance &&
+            (rect.top - currentRect.top).abs() < tolerance &&
+            (rect.bottom - currentRect.bottom).abs() < tolerance) {
+          // Merge rectangles
+          currentRect = Rect.fromLTRB(
+            math.min(currentRect.left, rect.left),
+            math.min(currentRect.top, rect.top),
+            math.max(currentRect.right, rect.right),
+            math.max(currentRect.bottom, rect.bottom),
+          );
+        } else {
+          mergedRects.add(currentRect);
+          currentRect = rect;
+        }
+      }
+    }
+    if (currentRect != null) {
+      mergedRects.add(currentRect);
+    }
+
+    return mergedRects;
+  }
+
+  /// Paint inline code lines with appropriate backgrounds and borders
+  void _paintInlineCodeLines(PaintingContext context, List<_InlineCodeLine> lines) {
+    for (final line in lines) {
+      for (final rect in line.rects) {
+        _paintInlineCodeBackground(context, rect, line);
+        _paintInlineCodeBorder(context, rect, line);
+      }
+    }
+  }
+
+  /// Paint the background for an inline code rectangle
+  void _paintInlineCodeBackground(PaintingContext context, Rect rect, _InlineCodeLine line) {
+    if (inlineCodeStyle.backgroundColor == null) return;
+
+    final backgroundPaint = Paint()
+      ..color = inlineCodeStyle.backgroundColor!;
+
+    if (inlineCodeStyle.radius == null) {
+      context.canvas.drawRect(rect, backgroundPaint);
+    } else if (line.type == _InlineCodeLineType.single) {
+      // Single line: apply full radius
+      final backgroundRect = RRect.fromRectAndRadius(rect, inlineCodeStyle.radius!);
+      context.canvas.drawRRect(backgroundRect, backgroundPaint);
+    } else {
+      // Multiline: apply selective radius for continuous effect
+      final radius = inlineCodeStyle.radius!;
+      final backgroundRect = RRect.fromRectAndCorners(
+        rect,
+        topLeft: line.type == _InlineCodeLineType.multiFirst ? radius : Radius.zero,
+        bottomLeft: line.type == _InlineCodeLineType.multiFirst ? radius : Radius.zero,
+        topRight: line.type == _InlineCodeLineType.multiLast ? radius : Radius.zero,
+        bottomRight: line.type == _InlineCodeLineType.multiLast ? radius : Radius.zero,
+      );
+      context.canvas.drawRRect(backgroundRect, backgroundPaint);
+    }
+  }
+
+  /// Paint the border for an inline code rectangle
+  void _paintInlineCodeBorder(PaintingContext context, Rect rect, _InlineCodeLine line) {
+    if (inlineCodeStyle.borderSide == null) return;
+
+    final borderPaint = Paint()
+      ..color = inlineCodeStyle.borderSide!.color
+      ..strokeWidth = inlineCodeStyle.borderSide!.width
+      ..style = PaintingStyle.stroke;
+
+    if (line.type == _InlineCodeLineType.single) {
+      // Single line: apply full border (with or without radius)
+      final radius = inlineCodeStyle.radius ?? Radius.zero;
+      final borderRect = RRect.fromRectAndRadius(rect, radius);
+      context.canvas.drawRRect(borderRect, borderPaint);
+    } else {
+      // Multiline: follow continuous border rules regardless of radius
+      _paintMultilineBorder(context, rect, line, borderPaint);
+    }
+  }
+
+  /// Paint multiline borders with continuous effect
+  void _paintMultilineBorder(PaintingContext context, Rect rect, _InlineCodeLine line, Paint borderPaint) {
+    final radius = inlineCodeStyle.radius ?? Radius.zero,
+      type = line.type;
+    switch (type) {
+      case _InlineCodeLineType.multiMiddle:
+        // Middle line: only horizontal borders
+        context.canvas.drawLine(
+          Offset(rect.left, rect.top),
+          Offset(rect.right, rect.top),
+          borderPaint,
+        );
+        context.canvas.drawLine(
+          Offset(rect.left, rect.bottom),
+          Offset(rect.right, rect.bottom),
+          borderPaint,
+        );
+        break;
+      case _InlineCodeLineType.multiFirst:
+        // First line: rounded left corners (or square if radius is zero), open right edge
+        final borderRect = RRect.fromRectAndCorners(
+          rect,
+          topLeft: radius,
+          bottomLeft: radius,
+        );
+        context.canvas.drawRRect(borderRect, borderPaint);
+        _eraseVerticalBorder(context, rect, isRightEdge: true);
+        break;
+      case _InlineCodeLineType.multiLast:
+        // Last line: rounded right corners (or square if radius is zero), open left edge
+        final borderRect = RRect.fromRectAndCorners(
+          rect,
+          topRight: radius,
+          bottomRight: radius,
+        );
+        context.canvas.drawRRect(borderRect, borderPaint);
+        _eraseVerticalBorder(context, rect, isRightEdge: false);
+        break;
+      default:
+        assert(false, 'Unknown line type: $type');
+    }
+  }
+
+  /// Erase vertical border by drawing over it with background color
+  void _eraseVerticalBorder(PaintingContext context, Rect rect, {required bool isRightEdge}) {
+    if (inlineCodeStyle.backgroundColor == null) return;
+
+    final erasePaint = Paint()
+      ..color = inlineCodeStyle.backgroundColor!
+      ..strokeWidth = inlineCodeStyle.borderSide!.width + 1;
+
+    final x = isRightEdge ? rect.right : rect.left;
+    context.canvas.drawLine(
+      Offset(x, rect.top),
+      Offset(x, rect.bottom),
+      erasePaint,
+    );
+  }
+}
+
+/// Represents the position of an inline code line in a multiline block
+enum _InlineCodeLineType {
+  /// Single line (not part of a multiline block)
+  single,
+  /// First line of a multiline block
+  multiFirst,
+  /// Middle line of a multiline block
+  multiMiddle,
+  /// Last line of a multiline block
+  multiLast,
+}
+
+/// Helper class to represent an inline code line with its properties
+class _InlineCodeLine {
+  const _InlineCodeLine({
+    required this.rects,
+    required this.type,
+  });
+
+  final List<Rect> rects;
+  final _InlineCodeLineType type;
 }
 
 class _TextLineElement extends RenderObjectElement {
