@@ -128,23 +128,22 @@ class InlineCodeStyle {
   /// Returns effective style to use for inline code for the specified
   /// [lineStyle].
   TextStyle styleFor(Style lineStyle) {
-    if (lineStyle.containsKey(Attribute.h1.key)) {
-      return header1 ?? style;
-    }
-    if (lineStyle.containsKey(Attribute.h2.key)) {
-      return header2 ?? style;
-    }
-    if (lineStyle.containsKey(Attribute.h3.key)) {
-      return header3 ?? style;
-    }
-    if (lineStyle.containsKey(Attribute.h4.key)) {
-      return header4 ?? style;
-    }
-    if (lineStyle.containsKey(Attribute.h5.key)) {
-      return header5 ?? style;
-    }
-    if (lineStyle.containsKey(Attribute.h6.key)) {
-      return header6 ?? style;
+    final headerLevel = lineStyle.attributes[Attribute.header.key]?.value as int?;
+    if (headerLevel != null) {
+      switch (headerLevel) {
+        case 1:
+          return header1 ?? style;
+        case 2:
+          return header2 ?? style;
+        case 3:
+          return header3 ?? style;
+        case 4:
+          return header4 ?? style;
+        case 5:
+          return header5 ?? style;
+        case 6:
+          return header6 ?? style;
+      }
     }
     return style;
   }
