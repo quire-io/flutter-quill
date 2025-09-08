@@ -351,9 +351,10 @@ class EditableTextBlock extends StatelessWidget {
     if (isCheck) {
       return checkboxLeading(leadingConfig);
     }
-    if (isCodeBlock) {
-      return codeBlockLineNumberLeading(leadingConfig);
-    }
+    // Potix: no line number for code block
+    // if (isCodeBlock) {
+    //   return codeBlockLineNumberLeading(leadingConfig);
+    // }
     return null;
   }
 
