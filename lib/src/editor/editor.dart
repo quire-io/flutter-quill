@@ -1274,8 +1274,18 @@ class RenderEditor extends RenderEditableContainerBox
         kMargin +
         offsetInViewport +
         scrollBottomInset;
+
+    // Add the container's bottom padding only if we're on the last line of a container
+    var containerBottomPadding = 0.0;
+    if (child case final RenderEditableContainerBox containerChild) {
+      if (_isOnLastLineOfContainer(selection.extent, child)) {
+        containerChild.resolvePadding();
+        containerBottomPadding = containerChild.resolvedPadding?.bottom ?? 0.0;
+      }
+    }
+
     final caretBottom =
-        endpoint.point.dy + kMargin + offsetInViewport + scrollBottomInset;
+        endpoint.point.dy + kMargin + containerBottomPadding + offsetInViewport + scrollBottomInset;
     double? dy;
     if (caretTop < scrollOffset) {
       dy = caretTop;
@@ -1287,6 +1297,14 @@ class RenderEditor extends RenderEditableContainerBox
     }
     // Clamping to 0.0 so that the content does not jump unnecessarily.
     return math.max(dy, 0);
+  }
+
+  bool _isOnLastLineOfContainer(TextPosition position, RenderEditableBox child) {
+    final localPosition = TextPosition(
+      offset: position.offset - child.container.documentOffset,
+    );
+
+    return child.getPositionBelow(localPosition) == null;
   }
 
   @override
