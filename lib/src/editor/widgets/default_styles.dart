@@ -211,7 +211,7 @@ class DefaultListBlockStyle extends DefaultTextBlockStyle {
       checkboxUIBuilder ?? this.checkboxUIBuilder,
       indentWidthBuilder: indentWidthBuilder ?? this.indentWidthBuilder,
       numberPointWidthBuilder:
-      numberPointWidthBuilder ?? this.numberPointWidthBuilder,
+          numberPointWidthBuilder ?? this.numberPointWidthBuilder,
     );
   }
 }
