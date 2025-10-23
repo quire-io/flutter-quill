@@ -20,6 +20,7 @@ class Embeddable {
 
   static Embeddable fromJson(Map<String, dynamic> json) {
     final m = Map<String, dynamic>.from(json);
+    if (m.length > 1) m.remove('source'); // #23442: remove the meta 'source' key if present
     assert(m.length == 1, 'Embeddable map must only have one key');
 
     return Embeddable(m.keys.first, m.values.first);
