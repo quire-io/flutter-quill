@@ -1116,6 +1116,7 @@ class QuillRawEditorState extends EditorState
   }
 
   void _handleFocusChanged() {
+    if (!mounted) return;
     if (widget.config.readOnly) {
       return;
     }
