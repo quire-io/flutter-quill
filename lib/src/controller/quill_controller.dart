@@ -154,6 +154,8 @@ class QuillController extends ChangeNotifier {
     }
   }
 
+  static const _maxIndentLevel = 8; // Potix: Aligned with QuillJS
+
   void _indentSelectionFormat(bool isIncrease) {
     final indent = getSelectionStyle().attributes[Attribute.indent.key];
     if (indent == null) {
@@ -167,7 +169,7 @@ class QuillController extends ChangeNotifier {
       return;
     }
     if (isIncrease) {
-      if (indent.value < 5) {
+      if (indent.value < _maxIndentLevel) {
         formatSelection(Attribute.getIndentLevel(indent.value + 1));
       }
       return;
@@ -196,7 +198,7 @@ class QuillController extends ChangeNotifier {
       } else if (indent.value == 1 && !isIncrease) {
         formatAttribute = Attribute.clone(Attribute.indentL1, null);
       } else if (isIncrease) {
-        if (indent.value < 5) {
+        if (indent.value < _maxIndentLevel) {
           formatAttribute = Attribute.getIndentLevel(indent.value + 1);
         }
       } else {
