@@ -240,10 +240,10 @@ class QuillController extends ChangeNotifier {
     }
   }
 
-  void _handleHistoryChange(int len) {
+  void _handleHistoryChange(int diff) {
     updateSelection(
       TextSelection.collapsed(
-        offset: len,
+        offset: selection.start + diff,
       ),
       ChangeSource.local,
     );
