@@ -92,10 +92,14 @@ class History {
     final delta = source.removeLast();
     // look for insert or delete
     var len = 0;
+    var indentChange = false;
     final ops = delta.toList();
     for (var i = 0; i < ops.length; i++) {
       if ((ops[i].key == Operation.insertKey) ||
           (ops[i].key == Operation.retainKey)) {
+        if (ops[i].hasAttribute('indent') || ops[i].hasAttribute('list')) {
+          indentChange = true;
+        }
         len += ops[i].length ?? 0;
       }
     }
@@ -106,7 +110,7 @@ class History {
     ignoreChange = true;
     doc.compose(delta, ChangeSource.local);
     ignoreChange = false;
-    return HistoryChanged(true, len);
+    return HistoryChanged(true, len, isIndentChange: indentChange);
   }
 
   HistoryChanged undo(Document doc) {

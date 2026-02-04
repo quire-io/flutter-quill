@@ -234,9 +234,10 @@ class QuillController extends ChangeNotifier {
   }
 
   void undo() {
-    final result = document.undo();
+    final result = document.undo(),
+      len = result.isIndentChange ? selection.start : result.len;
     if (result.changed) {
-      _handleHistoryChange(result.len);
+      _handleHistoryChange(len);
     }
   }
 
@@ -250,9 +251,10 @@ class QuillController extends ChangeNotifier {
   }
 
   void redo() {
-    final result = document.redo();
+    final result = document.redo(),
+      len = result.isIndentChange ? selection.start : result.len;
     if (result.changed) {
-      _handleHistoryChange(result.len);
+      _handleHistoryChange(len);
     }
   }
 
