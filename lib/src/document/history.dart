@@ -87,16 +87,21 @@ class History {
 
   HistoryChanged _change(Document doc, List<Delta> source, List<Delta> dest) {
     if (source.isEmpty) {
-      return const HistoryChanged(false, 0);
+      return const HistoryChanged(false, 0, 0);
     }
     final delta = source.removeLast();
     // look for insert or delete
-    var len = 0;
+    var diff = 0, retain = 0;
     final ops = delta.toList();
     for (var i = 0; i < ops.length; i++) {
-      if ((ops[i].key == Operation.insertKey) ||
-          (ops[i].key == Operation.retainKey)) {
-        len += ops[i].length ?? 0;
+      final length = ops[i].length ?? 0;
+      switch (ops[i].key) {
+        case Operation.insertKey:
+          diff += length;
+        case Operation.deleteKey:
+          diff -= length;
+        default:
+          retain += length;
       }
     }
     final base = Delta.from(doc.toDelta());
@@ -106,7 +111,7 @@ class History {
     ignoreChange = true;
     doc.compose(delta, ChangeSource.local);
     ignoreChange = false;
-    return HistoryChanged(true, len);
+    return HistoryChanged(true, diff, retain);
   }
 
   HistoryChanged undo(Document doc) {

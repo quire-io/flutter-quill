@@ -236,14 +236,14 @@ class QuillController extends ChangeNotifier {
   void undo() {
     final result = document.undo();
     if (result.changed) {
-      _handleHistoryChange(result.len);
+      _handleHistoryChange(result.diff, result.retains);
     }
   }
 
-  void _handleHistoryChange(int len) {
+  void _handleHistoryChange(int diff, int retaining) {
     updateSelection(
       TextSelection.collapsed(
-        offset: len,
+        offset: selection.start + (selection.start < retaining ? 0: diff),
       ),
       ChangeSource.local,
     );
@@ -252,7 +252,7 @@ class QuillController extends ChangeNotifier {
   void redo() {
     final result = document.redo();
     if (result.changed) {
-      _handleHistoryChange(result.len);
+      _handleHistoryChange(result.diff, result.retains);
     }
   }
 
