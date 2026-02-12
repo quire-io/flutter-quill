@@ -25,19 +25,22 @@ import 'style.dart';
 /// The rich text document
 class Document {
   /// Creates new empty document.
-  Document() : _delta = Delta()..insert('\n') {
+  Document({this.userOnly = false}) : _delta = Delta()..insert('\n') {
     loadDocument(_delta);
   }
 
   /// Creates new document from provided JSON `data`.
-  Document.fromJson(List data) : _delta = _transform(Delta.fromJson(data)) {
+  Document.fromJson(List data, {this.userOnly = false}) : _delta = _transform(Delta.fromJson(data)) {
     loadDocument(_delta);
   }
 
   /// Creates new document from provided `delta`.
-  Document.fromDelta(Delta delta) : _delta = delta {
+  Document.fromDelta(Delta delta, {this.userOnly = false}) : _delta = delta {
     loadDocument(delta);
   }
+
+  /// Collaborative editing's conditions should be true
+  final bool userOnly;
 
   /// Stores the plain text content of the entire document in memory for quick access.
   ///
@@ -68,7 +71,7 @@ class Document {
   final StreamController<DocChange> documentChangeObserver =
       StreamController.broadcast();
 
-  final History history = History();
+  late final History history = History(userOnly: userOnly);
 
   /// Stream of [DocChange]s applied to this document.
   Stream<DocChange> get changes => documentChangeObserver.stream;
