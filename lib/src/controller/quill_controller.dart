@@ -493,7 +493,7 @@ class QuillController extends ChangeNotifier {
     } else {
       toggledStyle = const Style();
     }
-    onSelectionChanged?.call(textSelection);
+    onSelectionChanged?.call(selection);
   }
 
   /// Given offset, find its leaf node in document
