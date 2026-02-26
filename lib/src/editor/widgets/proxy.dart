@@ -123,7 +123,7 @@ class RenderEmbedProxy extends RenderProxyBox implements RenderContentProxyBox {
 
   @override
   TextPosition getPositionForOffset(Offset offset) =>
-      TextPosition(offset: offset.dx > size.width / 2 ? 1 : 0);
+      const TextPosition(offset: 1); // Potix: SPEC #23261: Always put the cursor after an embed
 
   @override
   TextRange getWordBoundary(TextPosition position) =>
