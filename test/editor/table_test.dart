@@ -1,6 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/src/editor/widgets/text/text_table.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+List<Map<String, dynamic>> tableRow(List<String> cells, String rowId) {
+  final ops = <Map<String, dynamic>>[];
+  for (final cell in cells) {
+    ops
+      ..add({'insert': cell})
+      ..add({
+        'insert': '\n',
+        'attributes': {'table': rowId},
+      });
+  }
+  return ops;
+}
 
 void main() {
   group('Table Test', () {
@@ -167,22 +181,713 @@ void main() {
       expect(controller.selection.baseOffset, greaterThanOrEqualTo(14));
     });
   });
+
+  group('Table horizontal scroll & minCellWidth', () {
+    testWidgets('columns are floored at minCellWidth on a narrow viewport',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      expect(table.cellWidthForTest, greaterThanOrEqualTo(100),
+          reason: 'columns should never be narrower than minCellWidth');
+      expect(table.contentWidthForTest, greaterThan(table.size.width),
+          reason:
+              '4 columns at >=100px each should overflow a 200px-wide viewport');
+    });
+
+    testWidgets('the default minCellWidth applies when no custom style is set',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 150,
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      // 150px / 3 columns = 50px/column, well under the 80px default floor.
+      expect(table.cellWidthForTest, closeTo(80, 0.5));
+    });
+
+    testWidgets('a table that fits its viewport does not scroll',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        // A generous width relative to the default 100px minCellWidth and 2
+        // columns, so the table fits without flooring or overflowing.
+        editorWidth: 400,
+        initialDelta: [
+          ...tableRow(['A', 'B'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      expect(table.contentWidthForTest, lessThanOrEqualTo(table.size.width));
+
+      // With exactly 2 equal columns the row's geometric center falls
+      // exactly on the gutter between them; since the table doesn't
+      // overflow, hitTestSelf correctly reports false there (nothing to
+      // scroll), so the drag may legitimately miss the widget entirely.
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-300, 0),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(table.rowShiftForTest, 0,
+          reason: 'a table with no overflow must not claim the drag gesture');
+    });
+
+    testWidgets('dragging scrolls the table and clamps at both ends',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+      expect(maxScroll, greaterThan(0));
+
+      // Drag far past the end: the shift should clamp at maxScroll.
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pumpAndSettle();
+      expect(table.rowShiftForTest, closeTo(maxScroll, 0.5));
+
+      // Drag back past the start: the shift should clamp at 0.
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(1000, 0));
+      await tester.pumpAndSettle();
+      expect(table.rowShiftForTest, 0);
+    });
+
+    testWidgets(
+        'scroll position is synchronized across every row of the same table',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A1', 'B1', 'C1', 'D1'], 'row-1'),
+          ...tableRow(['A2', 'B2', 'C2', 'D2'], 'row-2'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final rows = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(rows, hasLength(2));
+
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+
+      expect(rows[0].rowShiftForTest, greaterThan(0));
+      expect(rows[1].rowShiftForTest, closeTo(rows[0].rowShiftForTest, 0.01),
+          reason: 'both rows share one scroll state and must move together');
+    });
+
+    testWidgets('hit-testing accounts for the current scroll offset',
+        (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson(tableRow(['A', 'B', 'C', 'D'], 'row-1')),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 400,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(
+                autoFocus: false,
+                customStyles: DefaultStyles(
+                  table: DefaultTableStyle(minCellWidth: 100),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+      expect(maxScroll, greaterThan(0));
+
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pumpAndSettle();
+      expect(table.rowShiftForTest, closeTo(maxScroll, 0.5));
+
+      // Tap near the right edge of the (now fully scrolled) row: it should
+      // land in the last column, 'D' (document offsets 6-7).
+      final rowRect = tester.getRect(find.byType(EditableTextTable).first);
+      await tester.tapAt(rowRect.topRight + Offset(-2, rowRect.height / 2));
+      await tester.pumpAndSettle(const Duration(milliseconds: 350));
+
+      expect(controller.selection.baseOffset, greaterThanOrEqualTo(6));
+      expect(controller.selection.baseOffset, lessThanOrEqualTo(7));
+    });
+  });
+
+  group('Table horizontal scroll indicator', () {
+    testWidgets('hidden by default, even when the table overflows',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      expect(table.contentWidthForTest, greaterThan(table.size.width),
+          reason: 'the table does overflow');
+      expect(table.indicatorOpacityForTest, 0,
+          reason: 'the indicator only reveals once the user interacts');
+      expect(table.scrollbarThumbRectForTest, isNull);
+    });
+
+    testWidgets('no indicator when the table fits its viewport',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 400,
+        initialDelta: [
+          ...tableRow(['A', 'B'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      expect(table.contentWidthForTest, lessThanOrEqualTo(table.size.width));
+
+      // With exactly 2 equal columns the row's geometric center falls on
+      // the gutter between them; since the table doesn't overflow, the
+      // drag may legitimately miss the widget (nothing to scroll there).
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-300, 0),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(table.indicatorOpacityForTest, 0);
+      expect(table.scrollbarThumbRectForTest, isNull);
+    });
+
+    testWidgets('dragging reveals the indicator immediately',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      // Drive the gesture manually (rather than tester.drag, which also
+      // ends it) so we can inspect the mid-drag state.
+      final gesture = await tester.startGesture(
+          tester.getCenter(find.byType(EditableTextTable).first));
+      await gesture.moveBy(const Offset(-40, 0));
+      await tester.pump();
+
+      expect(table.indicatorOpacityForTest, 1,
+          reason: 'shows the instant a drag starts, no linger beforehand');
+      expect(table.scrollbarThumbRectForTest, isNotNull);
+
+      await gesture.up();
+    });
+
+    testWidgets('lingers then fades out automatically once the drag ends',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+
+      // tester.drag() performs a full down-move-up gesture, so onEnd (and
+      // the fade-out scheduling it triggers) has already fired by the time
+      // it returns.
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+      expect(table.indicatorOpacityForTest, 1,
+          reason: 'still fully visible right after the drag ends');
+
+      // Still within the linger window (600ms) — not fading yet.
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(table.indicatorOpacityForTest, 1);
+
+      // Cross the linger threshold: the fade-out timer fires as part of
+      // advancing the clock past 600ms and starts the reverse animation,
+      // but its value only reflects elapsed time on a *subsequent* tick —
+      // a zero-duration pump() reports zero elapsed animation time, so an
+      // extra small-but-nonzero pump is needed to observe real progress.
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(table.indicatorOpacityForTest, lessThan(1));
+
+      // Let the fade finish.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(table.indicatorOpacityForTest, 0);
+      expect(table.scrollbarThumbRectForTest, isNull);
+    });
+
+    testWidgets(
+        'a ragged table reflects table-wide scroll state on its last row',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A1', 'B1', 'C1', 'D1'], 'row-1'),
+          ...tableRow(['A2'], 'row-2'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final rows = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(rows, hasLength(2));
+      // Row 2 (single column) never overflows on its own.
+      expect(
+          rows[1].contentWidthForTest, lessThanOrEqualTo(rows[1].size.width));
+
+      // Dragging the wider first row scrolls the shared state; row 2's own
+      // layout shift stays 0 (it fits by itself), but since both rows share
+      // one TableHorizontalScrollState, its indicator still reveals — and
+      // only the LAST row (row 2) actually paints it.
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-120, 0));
+      await tester.pump();
+
+      expect(rows[1].rowShiftForTest, 0,
+          reason: "a single-column row's own content never overflows");
+      expect(rows[0].indicatorOpacityForTest, 1);
+      expect(rows[1].indicatorOpacityForTest, 1,
+          reason: 'both rows share one scroll state, including its fade');
+      expect(rows[1].scrollbarThumbRectForTest, isNotNull,
+          reason: 'only the last row paints the shared indicator');
+      expect(rows[0].scrollbarThumbRectForTest, isNull,
+          reason: 'earlier rows never paint it, even while visible');
+    });
+
+    testWidgets('scrollbarEnabled: false disables the indicator entirely',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(
+          minCellWidth: 100,
+          scrollbarEnabled: false,
+        ),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+
+      // Dragging still scrolls the table — only the visual indicator is
+      // suppressed.
+      expect(table.rowShiftForTest, greaterThan(0));
+      expect(table.scrollbarThumbRectForTest, isNull,
+          reason: 'the indicator itself is disabled');
+    });
+
+    testWidgets('custom thickness and color are honored', (tester) async {
+      const thumbColor = Color(0xFF445566);
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(
+          minCellWidth: 100,
+          scrollbarThickness: 6,
+          scrollbarColor: thumbColor,
+        ),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+
+      expect(table.scrollbarThumbRectForTest!.height, 6);
+      expect(table, paints..rrect(color: thumbColor));
+    });
+
+    testWidgets('scrollbarMinThumbWidth floors the thumb width',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(
+          minCellWidth: 100,
+          scrollbarMinThumbWidth: 150,
+        ),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+
+      final gesture = await tester.startGesture(
+          tester.getCenter(find.byType(EditableTextTable).first));
+      // Move past the touch slop so the drag is actually recognized.
+      await gesture.moveBy(const Offset(-30, 0));
+      await tester.pump();
+
+      // The natural (unfloored) width here is well under 150.
+      expect(table.scrollbarThumbRectForTest!.width, closeTo(150, 0.5));
+
+      await gesture.moveBy(Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+      final trackRight = table.size.width - 2; // 2px inset from the edge
+      expect(table.scrollbarThumbRectForTest!.right, closeTo(trackRight, 0.5),
+          reason: 'even a floored-width thumb must still reach the end');
+
+      await gesture.up();
+    });
+
+    testWidgets('scrollbarBottomPadding positions the indicator',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(
+          minCellWidth: 100,
+          scrollbarBottomPadding: 12,
+        ),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-40, 0));
+      await tester.pump();
+
+      expect(table.scrollbarThumbRectForTest!.bottom,
+          closeTo(table.size.height - 12, 0.5));
+    });
+
+    testWidgets('default thickness and bottom padding match the design spec',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-40, 0));
+      await tester.pump();
+
+      expect(table.scrollbarThumbRectForTest!.height, 4);
+      expect(table.scrollbarThumbRectForTest!.bottom,
+          closeTo(table.size.height - 8, 0.5));
+    });
+
+    testWidgets(
+        'default scrollbar color follows the light theme when overflowing',
+        (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson([
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ]),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(brightness: Brightness.light),
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 400,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(autoFocus: false),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+
+      expect(table, paints..rrect(color: const Color(0x59000000)));
+    });
+
+    testWidgets(
+        'default scrollbar color follows the dark theme when overflowing',
+        (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson([
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ]),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(brightness: Brightness.dark),
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 400,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(autoFocus: false),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+
+      expect(table, paints..rrect(color: const Color(0x80FFFFFF)));
+    });
+
+    testWidgets(
+        'dark theme is honored even when the app supplies its own custom '
+        'table style (regression: DefaultStyles.merge replaces the whole '
+        "table style, so the app's style must not silently pin the light "
+        'color)', (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        theme: ThemeData(brightness: Brightness.dark),
+        // A custom style set for an unrelated reason (minCellWidth) that
+        // does not itself specify scrollbarColor — it must still resolve
+        // to the dark-theme color, not silently fall back to light.
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      final maxScroll = table.contentWidthForTest - table.size.width;
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pump();
+
+      expect(table, paints..rrect(color: DefaultTableStyle.defaultDarkScrollbarColor));
+    });
+  });
+
+  group('Table striped background', () {
+    testWidgets('stripe is painted on row index 2 with the configured color',
+        (tester) async {
+      const stripeColor = Color(0xFF112233);
+      await tester.pumpWidget(TableTestApp(
+        tableStyle: const DefaultTableStyle(stripeColor: stripeColor),
+        initialDelta: [
+          ...tableRow(['R0C0'], 'row-1'),
+          ...tableRow(['R1C0'], 'row-2'),
+          ...tableRow(['R2C0'], 'row-3'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final rows = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(rows, hasLength(3));
+
+      // Row 0 (header) — no stripe
+      expect(rows[0], isNot(paints..rect(color: stripeColor)));
+      // Row 1 — no stripe (rowIndex 1, odd)
+      expect(rows[1], isNot(paints..rect(color: stripeColor)));
+      // Row 2 — stripe (rowIndex 2, even and > 1)
+      expect(rows[2], paints..rect(color: stripeColor));
+    });
+
+    testWidgets('no stripe when stripeColor is null', (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        tableStyle: const DefaultTableStyle(stripeColor: null),
+        initialDelta: [
+          ...tableRow(['R0C0'], 'row-1'),
+          ...tableRow(['R1C0'], 'row-2'),
+          ...tableRow(['R2C0'], 'row-3'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final rows = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(rows, hasLength(3));
+
+      // No row should paint any rect (borders are strokes, not rects)
+      for (var i = 0; i < rows.length; i++) {
+        expect(rows[i], isNot(paints..rect()),
+            reason: 'row $i should not paint a filled rect');
+      }
+    });
+
+    testWidgets('stripe alternates on rows 2 and 4 only', (tester) async {
+      const stripeColor = Color(0xFF445566);
+      await tester.pumpWidget(TableTestApp(
+        tableStyle: const DefaultTableStyle(stripeColor: stripeColor),
+        initialDelta: [
+          ...tableRow(['R0C0'], 'row-1'),
+          ...tableRow(['R1C0'], 'row-2'),
+          ...tableRow(['R2C0'], 'row-3'),
+          ...tableRow(['R3C0'], 'row-4'),
+          ...tableRow(['R4C0'], 'row-5'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final rows = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(rows, hasLength(5));
+
+      // Rows 0, 1, 3 — no stripe
+      expect(rows[0], isNot(paints..rect(color: stripeColor)));
+      expect(rows[1], isNot(paints..rect(color: stripeColor)));
+      expect(rows[3], isNot(paints..rect(color: stripeColor)));
+      // Rows 2, 4 — stripe
+      expect(rows[2], paints..rect(color: stripeColor));
+      expect(rows[4], paints..rect(color: stripeColor));
+    });
+  });
 }
 
 class TableTestApp extends StatelessWidget {
   const TableTestApp({
     super.key,
     this.initialDelta = const [{'insert': '\n'}],
+    this.editorWidth,
+    this.tableStyle,
+    this.theme,
   });
 
   final List<dynamic> initialDelta;
 
+  /// When set, constrains the editor to this width instead of letting it
+  /// fill the available space, so tests can force narrow-viewport layouts.
+  final double? editorWidth;
+
+  /// Overrides the default table style (e.g. to set a custom
+  /// [DefaultTableStyle.minCellWidth]).
+  final DefaultTableStyle? tableStyle;
+
+  /// Overrides the app's theme, e.g. to test dark-theme behavior.
+  final ThemeData? theme;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: theme,
       home: Scaffold(
         appBar: AppBar(title: const Text('Table Test')),
-        body: TableTestWidget(initialDelta: initialDelta),
+        body: TableTestWidget(
+          initialDelta: initialDelta,
+          editorWidth: editorWidth,
+          tableStyle: tableStyle,
+        ),
       ),
     );
   }
@@ -192,9 +897,13 @@ class TableTestWidget extends StatefulWidget {
   const TableTestWidget({
     super.key,
     this.initialDelta = const [{'insert': '\n'}],
+    this.editorWidth,
+    this.tableStyle,
   });
 
   final List<dynamic> initialDelta;
+  final double? editorWidth;
+  final DefaultTableStyle? tableStyle;
 
   @override
   State<TableTestWidget> createState() => _TableTestWidgetState();
@@ -223,25 +932,30 @@ class _TableTestWidgetState extends State<TableTestWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final editor = QuillEditor.basic(
+      controller: controller,
+      config: QuillEditorConfig(
+        customStyles: DefaultStyles(
+          table: widget.tableStyle ??
+              DefaultTableStyle(
+                border: TableBorder.all(),
+                cellPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                stripeColor: Colors.grey.shade400,
+                headerStyle: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+        ),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          Expanded(
-            child: QuillEditor.basic(
-              controller: controller,
-              config: QuillEditorConfig(
-                customStyles: DefaultStyles(
-                  table: DefaultTableStyle(
-                    border: TableBorder.all(),
-                    cellPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    stripeColor: Colors.grey.shade400,
-                    headerStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          if (widget.editorWidth != null)
+            SizedBox(width: widget.editorWidth, height: 400, child: editor)
+          else
+            Expanded(child: editor),
         ],
       ),
     );

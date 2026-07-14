@@ -233,7 +233,21 @@ class DefaultTableStyle {
     this.cellPadding = const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
     this.stripeColor,
     this.headerStyle,
+    this.minCellWidth = 80,
+    this.scrollbarEnabled = true,
+    this.scrollbarThickness = 4,
+    this.scrollbarColor,
+    this.scrollbarMinThumbWidth = 24,
+    this.scrollbarBottomPadding = 8,
   });
+
+  /// System scrollbar color for light themes (matches Flutter's own
+  /// `CupertinoScrollbar` default: black @ ~35% opacity).
+  static const defaultLightScrollbarColor = Color(0x59000000);
+
+  /// System scrollbar color for dark themes (matches Flutter's own
+  /// `CupertinoScrollbar` default: white @ 50% opacity).
+  static const defaultDarkScrollbarColor = Color(0x80FFFFFF);
 
   /// Border configuration for the table.
   final TableBorder border;
@@ -248,17 +262,65 @@ class DefaultTableStyle {
   /// Text style for the first table row (header row).
   final TextStyle? headerStyle;
 
+  /// The minimum width of each column, including [cellPadding].
+  ///
+  /// Columns are normally sized by evenly dividing the available width, but
+  /// never below this value. When `columnCount * minCellWidth` exceeds the
+  /// editor's width, the table scrolls horizontally instead of squeezing its
+  /// columns further.
+  final double minCellWidth;
+
+  /// Whether a horizontal scroll indicator is drawn on an overflowing
+  /// table. The indicator is hidden until the user starts scrolling the
+  /// table, then fades out automatically once they stop.
+  final bool scrollbarEnabled;
+
+  /// Height of the scroll indicator. `<= 0` disables it.
+  final double scrollbarThickness;
+
+  /// Color of the scroll indicator (a single thumb; there is no track).
+  ///
+  /// When `null` (the default), it resolves at build time to the system
+  /// scrollbar color for the current theme brightness —
+  /// [defaultLightScrollbarColor] or [defaultDarkScrollbarColor].
+  final Color? scrollbarColor;
+
+  /// Minimum width of the scroll indicator, so it stays visible and
+  /// legible even when a table is many times wider than its viewport.
+  final double scrollbarMinThumbWidth;
+
+  /// Gap between the scroll indicator and the row's bottom edge.
+  ///
+  /// With a small [cellPadding] bottom inset, a large enough
+  /// [scrollbarBottomPadding] plus [scrollbarThickness] can overlay cell
+  /// content — this is expected, standard overlay-scrollbar behavior.
+  final double scrollbarBottomPadding;
+
   DefaultTableStyle copyWith({
     TableBorder? border,
     EdgeInsets? cellPadding,
     Color? stripeColor,
     TextStyle? headerStyle,
+    double? minCellWidth,
+    bool? scrollbarEnabled,
+    double? scrollbarThickness,
+    Color? scrollbarColor,
+    double? scrollbarMinThumbWidth,
+    double? scrollbarBottomPadding,
   }) {
     return DefaultTableStyle(
       border: border ?? this.border,
       cellPadding: cellPadding ?? this.cellPadding,
       stripeColor: stripeColor ?? this.stripeColor,
       headerStyle: headerStyle ?? this.headerStyle,
+      minCellWidth: minCellWidth ?? this.minCellWidth,
+      scrollbarEnabled: scrollbarEnabled ?? this.scrollbarEnabled,
+      scrollbarThickness: scrollbarThickness ?? this.scrollbarThickness,
+      scrollbarColor: scrollbarColor ?? this.scrollbarColor,
+      scrollbarMinThumbWidth:
+          scrollbarMinThumbWidth ?? this.scrollbarMinThumbWidth,
+      scrollbarBottomPadding:
+          scrollbarBottomPadding ?? this.scrollbarBottomPadding,
     );
   }
 }

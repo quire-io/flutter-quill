@@ -28,6 +28,7 @@ import '../widgets/cursor.dart';
 import '../widgets/default_styles.dart';
 import '../widgets/link.dart';
 import '../widgets/proxy.dart';
+import '../widgets/text/table_horizontal_scroll.dart';
 import '../widgets/text/text_block.dart';
 import '../widgets/text/text_line.dart';
 import '../widgets/text/text_selection.dart';
@@ -84,6 +85,12 @@ class QuillRawEditorState extends EditorState
   String get pastePlainText => controller.pastePlainText;
 
   ClipboardStatusNotifier? _clipboardStatus;
+
+  // Shared horizontal scroll state for table blocks, keyed by table id so
+  // every row of the same table scrolls in sync. Needs a vsync (for the
+  // scroll indicator's fade animation), so it's created in initState.
+  late final TableScrollRegistry _tableScrollRegistry;
+
   final LayerLink _toolbarLayerLink = LayerLink();
   final LayerLink _startHandleLayerLink = LayerLink();
   final LayerLink _endHandleLayerLink = LayerLink();
@@ -600,6 +607,7 @@ class QuillRawEditorState extends EditorState
           customLeadingBlockBuilder: widget.config.customLeadingBuilder,
           textDirection: nodeTextDirection,
           scrollBottomInset: widget.config.scrollBottomInset,
+          tableScrollRegistry: _tableScrollRegistry,
           horizontalSpacing: _getHorizontalSpacingForBlock(node, _styles),
           verticalSpacing: _getVerticalSpacingForBlock(node, _styles),
           textSelection: controller.selection,
@@ -819,6 +827,7 @@ class QuillRawEditorState extends EditorState
   @override
   void initState() {
     super.initState();
+    _tableScrollRegistry = TableScrollRegistry(vsync: this);
     _shortcutActionsManager = EditorKeyboardShortcutsActionsManager(
       rawEditorState: this,
       context: context,
@@ -1000,6 +1009,7 @@ class QuillRawEditorState extends EditorState
         ..removeListener(_onChangedClipboardStatus)
         ..dispose();
     }
+    _tableScrollRegistry.dispose();
     super.dispose();
   }
 

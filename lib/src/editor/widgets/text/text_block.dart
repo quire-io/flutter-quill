@@ -19,6 +19,7 @@ import '../default_leading_components/leading_components.dart';
 import '../default_styles.dart';
 import '../delegate.dart';
 import '../link.dart';
+import 'table_horizontal_scroll.dart';
 import 'text_line.dart';
 import 'text_selection.dart';
 import 'text_table.dart';
@@ -56,6 +57,22 @@ const List<String> romanNumbers = [
   'I'
 ];
 
+/// Returns a stable key identifying the table that [block] (a table row)
+/// belongs to, so all rows of the same table share one horizontal scroll
+/// state. A "table" is a run of consecutive blocks carrying the table
+/// attribute; the key is derived from the first row's table id, which
+/// stays stable across unrelated edits to the table's own rows.
+String _tableKeyForBlock(Block block) {
+  var first = block;
+  var prev = block.previous;
+  while (prev is Block && prev.style.attributes.containsKey(Attribute.table.key)) {
+    first = prev;
+    prev = prev.previous;
+  }
+  return (first.style.attributes[Attribute.table.key]?.value as String?) ??
+      'table-${identityHashCode(first)}';
+}
+
 class EditableTextBlock extends StatelessWidget {
   const EditableTextBlock({
     required this.block,
@@ -85,6 +102,7 @@ class EditableTextBlock extends StatelessWidget {
     this.customStyleBuilder,
     this.customLinkPrefixes = const <String>[],
     this.customLeadingBlockBuilder,
+    this.tableScrollRegistry,
     super.key,
   });
 
@@ -115,6 +133,7 @@ class EditableTextBlock extends StatelessWidget {
   final bool? checkBoxReadOnly;
   final List<String> customLinkPrefixes;
   final TextRange composingRange;
+  final TableScrollRegistry? tableScrollRegistry;
 
   @override
   Widget build(BuildContext context) {
@@ -124,10 +143,26 @@ class EditableTextBlock extends StatelessWidget {
 
     // Potix: use EditableTextTable for render table block
     if (block.style.attributes.containsKey(Attribute.table.key)) {
+      var tableStyle = defaultStyles?.table ?? const DefaultTableStyle();
+      // A null scrollbarColor means "auto" — resolve it from the ambient
+      // theme here, since this is the only place a BuildContext is
+      // available. This must run regardless of where tableStyle came from
+      // (the library default or an app-supplied customStyles.table), since
+      // DefaultStyles.merge replaces the whole table style rather than
+      // merging it field-by-field.
+      if (tableStyle.scrollbarColor == null) {
+        tableStyle = tableStyle.copyWith(
+          scrollbarColor: Theme.of(context).brightness == Brightness.dark
+              ? DefaultTableStyle.defaultDarkScrollbarColor
+              : DefaultTableStyle.defaultLightScrollbarColor,
+        );
+      }
       return EditableTextTable(
         block: block,
         textDirection: textDirection,
-        tableStyle: defaultStyles?.table ?? const DefaultTableStyle(),
+        tableStyle: tableStyle,
+        scrollRegistry: tableScrollRegistry,
+        tableKey: _tableKeyForBlock(block),
         children: _buildChildren(
           context,
           indentLevelCounts,

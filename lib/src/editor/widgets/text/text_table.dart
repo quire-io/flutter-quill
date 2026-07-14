@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -8,8 +9,14 @@ import '../../../document/nodes/block.dart';
 import '../../editor.dart';
 import '../box.dart';
 import '../default_styles.dart';
+import 'table_horizontal_scroll.dart';
 import 'text_line.dart';
 import 'text_selection.dart';
+
+/// Tolerance below which a table's content is treated as fitting its
+/// viewport exactly, to avoid spurious clipping/scrolling from floating
+/// point rounding.
+const double _kTableOverflowEpsilon = 0.01;
 
 /// A specialized widget for rendering table blocks where each cell contains
 /// an [EditableTextLine] that can be edited independently.
@@ -18,6 +25,8 @@ class EditableTextTable extends MultiChildRenderObjectWidget {
     required this.block,
     required this.textDirection,
     required this.tableStyle,
+    required this.tableKey,
+    this.scrollRegistry,
     super.key,
     super.children,
   });
@@ -25,6 +34,15 @@ class EditableTextTable extends MultiChildRenderObjectWidget {
   final Block block;
   final TextDirection textDirection;
   final DefaultTableStyle tableStyle;
+
+  /// Identifies which table (a run of consecutive table-row blocks) this
+  /// row belongs to, so all of its rows share one horizontal scroll state.
+  final String tableKey;
+
+  /// Registry of shared horizontal scroll state, keyed by [tableKey]. Null
+  /// disables horizontal scrolling: columns are still floored at
+  /// [DefaultTableStyle.minCellWidth], but any overflow is simply clipped.
+  final TableScrollRegistry? scrollRegistry;
 
   @override
   MultiChildRenderObjectElement createElement() => _TextTableElement(this);
@@ -35,6 +53,8 @@ class EditableTextTable extends MultiChildRenderObjectWidget {
       block: block,
       textDirection: textDirection,
       tableStyle: tableStyle,
+      scrollRegistry: scrollRegistry,
+      tableKey: tableKey,
     );
   }
 
@@ -44,7 +64,8 @@ class EditableTextTable extends MultiChildRenderObjectWidget {
     renderObject
       ..setContainer(block)
       ..textDirection = textDirection
-      ..tableStyle = tableStyle;
+      ..tableStyle = tableStyle
+      ..setScrollContext(scrollRegistry, tableKey);
   }
 }
 
@@ -62,34 +83,112 @@ class RenderEditableTextTable extends RenderEditableContainerBox
   RenderEditableTextTable({
     required Block block,
     required super.textDirection,
+    required String tableKey,
     DefaultTableStyle? tableStyle,
+    TableScrollRegistry? scrollRegistry,
     super.children,
-  })  : _configuration = ImageConfiguration(textDirection: textDirection),
-        _tableStyle = tableStyle ?? const DefaultTableStyle(),
+  })  : _tableStyle = tableStyle ?? const DefaultTableStyle(),
+        // ignore: prefer_initializing_formals
+        _tableKey = tableKey,
+        // ignore: prefer_initializing_formals
+        _scrollRegistry = scrollRegistry,
         super(
           container: block,
           scrollBottomInset: 0,
           padding: EdgeInsets.zero,
         );
 
-  BoxPainter? _painter;
-
   DefaultTableStyle _tableStyle;
   DefaultTableStyle get tableStyle => _tableStyle;
 
   set tableStyle(DefaultTableStyle value) {
     if (value == _tableStyle) return;
+    final layoutChanged = value.cellPadding != _tableStyle.cellPadding ||
+        value.minCellWidth != _tableStyle.minCellWidth;
     _tableStyle = value;
-    markNeedsPaint();
+    if (layoutChanged) {
+      markNeedsLayout();
+    } else {
+      markNeedsPaint();
+    }
   }
 
-  ImageConfiguration get configuration => _configuration;
-  ImageConfiguration _configuration;
+  // --- Horizontal scroll (shared across every row of the same table) ---
 
-  set configuration(ImageConfiguration value) {
-    if (value == _configuration) return;
-    _configuration = value;
-    markNeedsPaint();
+  TableScrollRegistry? _scrollRegistry;
+  String _tableKey;
+  TableHorizontalScrollState? _scrollState;
+
+  /// Cached results from the last [performLayout], reused by painting,
+  /// hit-testing, and border drawing so they stay consistent with layout.
+  double _cellWidth = 0;
+  double _contentWidth = 0;
+  double _rowShift = 0;
+
+  /// This row's current per-column width, floored at
+  /// [DefaultTableStyle.minCellWidth]. Exposed for widget tests only.
+  @visibleForTesting
+  double get cellWidthForTest => _cellWidth;
+
+  /// This row's total content width (`cellWidth * columnCount`). Exposed for
+  /// widget tests only.
+  @visibleForTesting
+  double get contentWidthForTest => _contentWidth;
+
+  /// The horizontal shift currently applied to this row's cells to reflect
+  /// the shared scroll offset. Exposed for widget tests only.
+  @visibleForTesting
+  double get rowShiftForTest => _rowShift;
+
+  /// The current opacity (0-1) of the tap-to-reveal scroll indicator, or 0
+  /// if there's no shared scroll state. Exposed for widget tests only.
+  @visibleForTesting
+  double get indicatorOpacityForTest => _scrollState?.indicatorOpacity ?? 0;
+
+  /// The scroll indicator's thumb rect in this row's local coordinates, or
+  /// `null` when nothing should be painted right now. Exposed for widget
+  /// tests only.
+  @visibleForTesting
+  Rect? get scrollbarThumbRectForTest => _computeScrollbarGeometry();
+
+  /// Updates which shared scroll state this row participates in. Called by
+  /// [EditableTextTable.updateRenderObject] on every rebuild; a no-op when
+  /// neither the registry nor the table key actually changed.
+  void setScrollContext(TableScrollRegistry? registry, String tableKey) {
+    if (identical(registry, _scrollRegistry) && tableKey == _tableKey) return;
+    if (attached) _unsubscribeScroll();
+    _scrollRegistry = registry;
+    _tableKey = tableKey;
+    if (attached) _subscribeScroll();
+    markNeedsLayout();
+  }
+
+  void _subscribeScroll() {
+    final state = _scrollRegistry?.acquire(_tableKey);
+    _scrollState = state;
+    state?.addListener(_onScrollChanged);
+    state?.indicatorListenable.addListener(_onIndicatorChanged);
+  }
+
+  void _unsubscribeScroll() {
+    final state = _scrollState;
+    if (state == null) return;
+    state
+      ..removeListener(_onScrollChanged)
+      ..indicatorListenable.removeListener(_onIndicatorChanged)
+      ..removeRow(this);
+    _scrollRegistry?.release(_tableKey);
+    _scrollState = null;
+  }
+
+  void _onScrollChanged() => markNeedsLayout();
+
+  void _onIndicatorChanged() => markNeedsPaint();
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _subscribeScroll();
   }
 
   @override
@@ -271,10 +370,17 @@ class RenderEditableTextTable extends RenderEditableContainerBox
 
   @override
   void detach() {
-    _painter?.dispose();
-    _painter = null;
+    _unsubscribeScroll();
+    _dragRecognizer?.dispose();
+    _dragRecognizer = null;
     super.detach();
     markNeedsPaint();
+  }
+
+  @override
+  void dispose() {
+    _clipRectLayer.layer = null;
+    super.dispose();
   }
 
   @override
@@ -292,7 +398,10 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     var totalWidth = 0.0;
     var child = firstChild;
     while (child != null) {
-      totalWidth += child.getMinIntrinsicWidth(height) + paddingWidth;
+      totalWidth += math.max(
+        child.getMinIntrinsicWidth(height) + paddingWidth,
+        tableStyle.minCellWidth,
+      );
       child = childAfter(child);
     }
     return totalWidth;
@@ -306,7 +415,10 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     var totalWidth = 0.0;
     var child = firstChild;
     while (child != null) {
-      totalWidth += child.getMaxIntrinsicWidth(height) + paddingWidth;
+      totalWidth += math.max(
+        child.getMaxIntrinsicWidth(height) + paddingWidth,
+        tableStyle.minCellWidth,
+      );
       child = childAfter(child);
     }
     return totalWidth;
@@ -320,11 +432,13 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     final paddingWidth = cellPadding.horizontal;
     final paddingHeight = cellPadding.vertical;
 
-    final cellWidth = (width / childCount) - paddingWidth;
+    final cellWidth = math.max<double>(
+        0, math.max(width / childCount, tableStyle.minCellWidth) - paddingWidth);
     var maxHeight = 0.0;
     var child = firstChild;
     while (child != null) {
-      maxHeight = math.max(maxHeight, child.getMinIntrinsicHeight(cellWidth) + paddingHeight);
+      maxHeight = math.max(
+          maxHeight, child.getMinIntrinsicHeight(cellWidth) + paddingHeight);
       child = childAfter(child);
     }
     return maxHeight;
@@ -338,11 +452,13 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     final paddingWidth = cellPadding.horizontal;
     final paddingHeight = cellPadding.vertical;
 
-    final cellWidth = (width / childCount) - paddingWidth;
+    final cellWidth = math.max<double>(
+        0, math.max(width / childCount, tableStyle.minCellWidth) - paddingWidth);
     var maxHeight = 0.0;
     var child = firstChild;
     while (child != null) {
-      maxHeight = math.max(maxHeight, child.getMaxIntrinsicHeight(cellWidth) + paddingHeight);
+      maxHeight = math.max(
+          maxHeight, child.getMaxIntrinsicHeight(cellWidth) + paddingHeight);
       child = childAfter(child);
     }
     return maxHeight;
@@ -353,6 +469,9 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     assert(constraints.hasBoundedWidth);
 
     if (childCount == 0) {
+      _cellWidth = 0;
+      _contentWidth = 0;
+      _rowShift = 0;
       size = constraints.constrain(Size.zero);
       return;
     }
@@ -362,8 +481,26 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     final paddingWidth = cellPadding.horizontal;
     final paddingHeight = cellPadding.vertical;
 
-    // Calculate cell width by evenly dividing available width
-    final cellWidth = constraints.maxWidth / childCount;
+    // Calculate cell width by evenly dividing the available width, floored
+    // at the configured minimum so columns don't squeeze to unreadable
+    // widths on narrow screens; the table scrolls horizontally instead.
+    final cellWidth =
+        math.max(constraints.maxWidth / childCount, tableStyle.minCellWidth);
+    final contentWidth = cellWidth * childCount;
+
+    // Report this row's geometry to the shared scroll state (if any), so
+    // sibling rows of the same table know how far the table can scroll.
+    // This must stay side-effect free w.r.t. the render tree: it never
+    // notifies listeners, since a sibling row may still be mid-layout.
+    _scrollState?.reportRowGeometry(this, contentWidth, constraints.maxWidth);
+    final rowShift = math.min<double>(
+      _scrollState?.offset ?? 0,
+      math.max(0, contentWidth - constraints.maxWidth),
+    );
+
+    _cellWidth = cellWidth;
+    _contentWidth = contentWidth;
+    _rowShift = rowShift;
 
     // Create constraints for each cell, accounting for padding
     final cellConstraints = BoxConstraints(
@@ -377,12 +514,12 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     var currentX = 0.0;
     var maxHeight = 0.0;
 
-    // Layout each child and position them horizontally with padding
+    // Layout each child and position them horizontally with padding, then
+    // shift everything left by the shared horizontal scroll offset.
     while (child != null) {
       child.layout(cellConstraints, parentUsesSize: true);
-      // Apply left and top padding to the child position
       (child.parentData as EditableContainerParentData).offset = Offset(
-        currentX + cellPadding.left,
+        currentX + cellPadding.left - rowShift,
         cellPadding.top,
       );
 
@@ -393,20 +530,39 @@ class RenderEditableTextTable extends RenderEditableContainerBox
       child = childAfter(child);
     }
 
-    // Set the table size
+    // The table's own size always matches the viewport; overflowing content
+    // scrolls beneath it (see paint()).
     size = constraints.constrain(Size(constraints.maxWidth, maxHeight));
   }
+
+  final LayerHandle<ClipRectLayer> _clipRectLayer =
+      LayerHandle<ClipRectLayer>();
 
   @override
   void paint(PaintingContext context, Offset offset) {
     // Paint striped background first (if applicable)
     _paintStripedBackground(context, offset);
 
-    // Paint children next
-    defaultPaint(context, offset);
+    // Paint children next, clipping to the row's own bounds whenever the
+    // scrolled content is wider than the viewport.
+    if (_contentWidth > size.width + _kTableOverflowEpsilon) {
+      _clipRectLayer.layer = context.pushClipRect(
+        needsCompositing,
+        offset,
+        Offset.zero & size,
+        defaultPaint,
+        oldLayer: _clipRectLayer.layer,
+      );
+    } else {
+      _clipRectLayer.layer = null;
+      defaultPaint(context, offset);
+    }
 
     // Paint borders last
     _paintBorders(context, offset);
+
+    // Paint the tap-to-reveal scroll indicator on top (last row only).
+    _paintScrollbar(context, offset);
   }
 
   void _paintStripedBackground(PaintingContext context, Offset offset) {
@@ -441,20 +597,14 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     }
   }
 
-  /// Determines if this table row is the first table row (header row).
-  bool get isFirstTableRow {
-    var prevBlock = container.previous;
-
-    // Check if there are any previous table blocks
-    while (prevBlock != null) {
-      if (prevBlock is Block &&
-          prevBlock.style.attributes.containsKey(Attribute.table.key)) {
-        return false; // Found a previous table block, so this is not the first
-      }
-      prevBlock = prevBlock.previous;
-    }
-
-    return true; // No previous table blocks found, this is the first
+  /// Whether this row is the last row of its table, i.e. the immediately
+  /// following block is not also a table row. A table is a run of
+  /// consecutive table blocks (matches [_paintStripedBackground] and the
+  /// tableKey derivation in text_block.dart).
+  bool get isLastTableRow {
+    final nextBlock = container.next;
+    return !(nextBlock is Block &&
+        nextBlock.style.attributes.containsKey(Attribute.table.key));
   }
 
   void _paintBorders(PaintingContext context, Offset offset) {
@@ -479,10 +629,9 @@ class RenderEditableTextTable extends RenderEditableContainerBox
       );
     }
 
-    // Check if the next block is also a table to avoid overlapping borders
-    final nextBlock = container.next;
-    final shouldDrawBottomBorder = border.bottom.width > 0 &&
-        !(nextBlock is Block && nextBlock.style.attributes.containsKey(Attribute.table.key));
+    // Only the last row draws a bottom border, to avoid doubling it up
+    // against the next row's top border.
+    final shouldDrawBottomBorder = border.bottom.width > 0 && isLastTableRow;
 
     if (shouldDrawBottomBorder) {
       final paint = Paint()
@@ -520,16 +669,19 @@ class RenderEditableTextTable extends RenderEditableContainerBox
       );
     }
 
-    // Draw vertical separators between cells using verticalInside border
-    if (border.verticalInside.width > 0) {
+    // Draw vertical separators between cells using verticalInside border,
+    // accounting for the current horizontal scroll offset. Separators that
+    // land outside the row's own bounds (scrolled past either edge) are
+    // skipped since the clip in paint() would hide them anyway.
+    if (border.verticalInside.width > 0 && _cellWidth > 0) {
       final paint = Paint()
         ..color = border.verticalInside.color
         ..strokeWidth = border.verticalInside.width
         ..style = PaintingStyle.stroke;
 
-      final cellWidth = size.width / childCount;
       for (var i = 1; i < childCount; i++) {
-        final x = offset.dx + (i * cellWidth);
+        final x = offset.dx + i * _cellWidth - _rowShift;
+        if (x <= tableRect.left || x >= tableRect.right) continue;
         canvas.drawLine(
           Offset(x, offset.dy),
           Offset(x, offset.dy + size.height),
@@ -538,6 +690,68 @@ class RenderEditableTextTable extends RenderEditableContainerBox
       }
     }
   }
+
+  /// Computes the tap-to-reveal scroll indicator's thumb rect in this row's
+  /// local coordinates, or `null` when nothing should be painted (not the
+  /// last row, the table fits, the indicator is disabled, or it's not
+  /// currently visible).
+  ///
+  /// Geometry is derived from the shared [_scrollState] (table-wide extent
+  /// and offset) rather than this row's own `_contentWidth`/`_rowShift`,
+  /// since a ragged table's last row may overflow less than its siblings —
+  /// or not at all — while the table as a whole still scrolls.
+  Rect? _computeScrollbarGeometry() {
+    if (!tableStyle.scrollbarEnabled) return null;
+    final scrollState = _scrollState;
+    if (scrollState == null || !scrollState.canScroll) return null;
+    if (!isLastTableRow) return null;
+    if (scrollState.indicatorOpacity <= 0) return null;
+
+    final thickness = tableStyle.scrollbarThickness;
+    if (thickness <= 0) return null;
+    if (size.isEmpty) return null;
+
+    const horizontalInset = 2.0;
+    const trackLeft = horizontalInset;
+    final trackRight = size.width - horizontalInset;
+    final trackWidth = trackRight - trackLeft;
+    if (trackWidth <= 0) return null;
+
+    final maxScrollExtent = scrollState.maxScrollExtent;
+    final visibleFraction = size.width / (size.width + maxScrollExtent);
+    final thumbWidth = math.min(
+      trackWidth,
+      math.max(
+          trackWidth * visibleFraction, tableStyle.scrollbarMinThumbWidth),
+    );
+    final scrollFraction =
+        (scrollState.offset / maxScrollExtent).clamp(0.0, 1.0);
+    final thumbLeft = trackLeft + (trackWidth - thumbWidth) * scrollFraction;
+    final thumbTop = size.height - tableStyle.scrollbarBottomPadding - thickness;
+
+    return Rect.fromLTWH(thumbLeft, thumbTop, thumbWidth, thickness);
+  }
+
+  void _paintScrollbar(PaintingContext context, Offset offset) {
+    final thumb = _computeScrollbarGeometry();
+    if (thumb == null) return;
+
+    final opacity = _scrollState!.indicatorOpacity;
+    // Normally already resolved to a concrete color by text_block.dart (the
+    // sole place with a BuildContext to resolve "auto"); this fallback only
+    // matters for a DefaultTableStyle constructed and painted directly,
+    // bypassing that resolution.
+    final color =
+        tableStyle.scrollbarColor ?? DefaultTableStyle.defaultLightScrollbarColor;
+    final radius = Radius.circular(tableStyle.scrollbarThickness / 2);
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(thumb.shift(offset), radius),
+      Paint()..color = color.withValues(alpha: color.a * opacity),
+    );
+  }
+
+  @override
+  bool hitTestSelf(Offset position) => _scrollState?.canScroll ?? false;
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
@@ -552,16 +766,15 @@ class RenderEditableTextTable extends RenderEditableContainerBox
   RenderEditableBox childAtOffset(Offset offset) {
     assert(firstChild != null);
 
-    if (childCount == 0) {
+    if (childCount == 0 || _cellWidth <= 0) {
       return firstChild!;
     }
 
-    // For horizontal layout, we need to check the x-coordinate
-    // Calculate cell width by evenly dividing available width
-    final cellWidth = size.width / childCount;
-
-    // Determine which cell the offset falls into
-    final cellIndex = (offset.dx / cellWidth).floor().clamp(0, childCount - 1);
+    // For horizontal layout, we need to check the x-coordinate, accounting
+    // for the current horizontal scroll offset.
+    final cellIndex = ((offset.dx + _rowShift) / _cellWidth)
+        .floor()
+        .clamp(0, childCount - 1);
 
     // Find the child at the calculated index
     var child = firstChild;
@@ -570,6 +783,78 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     }
 
     return child ?? lastChild!;
+  }
+
+  // --- Horizontal drag-to-scroll / wheel-to-scroll gestures ---
+  //
+  // Gestures are only claimed while the table actually overflows its
+  // viewport ([TableHorizontalScrollState.canScroll]); a table that fits
+  // never intercepts pointer events. The drag recognizer only accepts
+  // touch/stylus/trackpad devices — mouse drags are left to the editor's
+  // own (mouse-only) selection drag recognizer, so desktop text selection
+  // is unaffected.
+  HorizontalDragGestureRecognizer? _dragRecognizer;
+
+  HorizontalDragGestureRecognizer _ensureDragRecognizer() {
+    final existing = _dragRecognizer;
+    if (existing != null) return existing;
+
+    final recognizer = HorizontalDragGestureRecognizer(
+      debugOwner: this,
+      supportedDevices: const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.trackpad,
+      },
+    )
+      ..dragStartBehavior = DragStartBehavior.down
+      ..onStart = (_) {
+        _scrollState?.showIndicator();
+      }
+      ..onUpdate = (details) {
+        final state = _scrollState;
+        state?.scrollBy(-details.delta.dx);
+        state?.showIndicator();
+      }
+      ..onEnd = (_) {
+        _scrollState?.scheduleIndicatorFadeOut();
+      }
+      ..onCancel = () {
+        _scrollState?.scheduleIndicatorFadeOut();
+      };
+    _dragRecognizer = recognizer;
+    return recognizer;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+    assert(debugHandleEvent(event, entry));
+    final scrollState = _scrollState;
+    if (scrollState == null || !scrollState.canScroll) return;
+
+    if (event is PointerDownEvent) {
+      _ensureDragRecognizer().addPointer(event);
+    } else if (event is PointerPanZoomStartEvent) {
+      _ensureDragRecognizer().addPointerPanZoom(event);
+    } else if (event is PointerScrollEvent &&
+        event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs()) {
+      GestureBinding.instance.pointerSignalResolver
+          .register(event, _handlePointerScroll);
+    }
+  }
+
+  void _handlePointerScroll(PointerEvent event) {
+    if (event is PointerScrollEvent) {
+      // Each wheel/trackpad tick is discrete (no clean start/end pairing
+      // like a drag has), so re-arm the fade-out linger on every tick;
+      // once ticks stop arriving, the last-scheduled timer fires and fades
+      // the indicator out.
+      _scrollState
+        ?..scrollBy(event.scrollDelta.dx)
+        ..showIndicator()
+        ..scheduleIndicatorFadeOut();
+    }
   }
 
   @override
