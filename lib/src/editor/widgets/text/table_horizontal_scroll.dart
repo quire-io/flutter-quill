@@ -5,6 +5,11 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
+/// Tolerance below which a table's content is treated as fitting its viewport
+/// exactly, to avoid spurious clipping/scrolling from floating-point rounding.
+/// Shared by the layout/paint clip and the scroll/gesture gate so they agree.
+const double kTableOverflowEpsilon = 0.01;
+
 /// How long the tap-to-reveal scroll indicator stays fully visible after the
 /// user stops interacting, before it starts fading out.
 const Duration _kIndicatorLingerDuration = Duration(milliseconds: 600);
@@ -49,11 +54,24 @@ class TableHorizontalScrollState extends ChangeNotifier {
       final viewportWidth = _rowViewportWidths[entry.key] ?? 0;
       extent = math.max(extent, entry.value - viewportWidth);
     }
-    return math.max(0, extent);
+    // Treat sub-epsilon overflow (floating-point rounding on an exactly-fitting
+    // table) as no overflow, so canScroll/hit-testing don't claim gestures for
+    // a table that visually fits. Keeps this gate consistent with the paint
+    // clip, which uses the same tolerance.
+    return extent > kTableOverflowEpsilon ? extent : 0.0;
   }
 
   /// Whether any registered row currently overflows its viewport.
   bool get canScroll => maxScrollExtent > 0;
+
+  /// Whether the offset can still move by [delta] in its direction, i.e. it is
+  /// not already clamped at the corresponding extent. Used to decide whether a
+  /// wheel/trackpad scroll should be claimed or left to a scrollable ancestor.
+  bool canScrollBy(double delta) {
+    if (delta > 0) return _offset < maxScrollExtent;
+    if (delta < 0) return _offset > 0;
+    return false;
+  }
 
   /// Current opacity (0-1) of the tap-to-reveal scroll indicator.
   double get indicatorOpacity => _fadeController.value;

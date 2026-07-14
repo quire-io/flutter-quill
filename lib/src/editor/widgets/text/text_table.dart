@@ -4,7 +4,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../../document/attribute.dart';
 import '../../../document/nodes/block.dart';
 import '../../editor.dart';
 import '../box.dart';
@@ -12,11 +11,6 @@ import '../default_styles.dart';
 import 'table_horizontal_scroll.dart';
 import 'text_line.dart';
 import 'text_selection.dart';
-
-/// Tolerance below which a table's content is treated as fitting its
-/// viewport exactly, to avoid spurious clipping/scrolling from floating
-/// point rounding.
-const double _kTableOverflowEpsilon = 0.01;
 
 /// A specialized widget for rendering table blocks where each cell contains
 /// an [EditableTextLine] that can be edited independently.
@@ -181,7 +175,40 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     _scrollState = null;
   }
 
-  void _onScrollChanged() => markNeedsLayout();
+  void _onScrollChanged() {
+    // A scroll only shifts cells horizontally; it never changes their size or
+    // this row's size. So reposition the already-laid-out children in place
+    // and repaint, instead of dirtying layout. Rows are laid out by
+    // RenderEditor with parentUsesSize (so they are not relayout boundaries):
+    // marking layout dirty here would relayout the entire document on every
+    // pointer-move frame of a drag.
+    if (_applyRowShift()) {
+      markNeedsPaint();
+      markNeedsSemanticsUpdate();
+    }
+  }
+
+  /// Recomputes [_rowShift] from the shared scroll offset and shifts the
+  /// already-positioned children to match, without triggering a relayout.
+  /// Returns whether anything actually moved.
+  bool _applyRowShift() {
+    if (!hasSize) return false;
+    final newShift = math.min<double>(
+      _scrollState?.offset ?? 0,
+      math.max(0, _contentWidth - size.width),
+    );
+    if (newShift == _rowShift) return false;
+    final delta = _rowShift - newShift;
+    var child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as EditableContainerParentData;
+      parentData.offset =
+          Offset(parentData.offset.dx + delta, parentData.offset.dy);
+      child = childAfter(child);
+    }
+    _rowShift = newShift;
+    return true;
+  }
 
   void _onIndicatorChanged() => markNeedsPaint();
 
@@ -545,7 +572,7 @@ class RenderEditableTextTable extends RenderEditableContainerBox
 
     // Paint children next, clipping to the row's own bounds whenever the
     // scrolled content is wider than the viewport.
-    if (_contentWidth > size.width + _kTableOverflowEpsilon) {
+    if (_contentWidth > size.width + kTableOverflowEpsilon) {
       _clipRectLayer.layer = context.pushClipRect(
         needsCompositing,
         offset,
@@ -568,17 +595,8 @@ class RenderEditableTextTable extends RenderEditableContainerBox
   void _paintStripedBackground(PaintingContext context, Offset offset) {
     if (childCount == 0) return;
 
-    // Calculate row index by counting previous table blocks
-    var rowIndex = 0;
-    var prevBlock = container.previous;
-
-    // Count previous table rows
-    while (prevBlock != null &&
-           prevBlock is Block &&
-           prevBlock.style.attributes.containsKey(Attribute.table.key)) {
-      rowIndex++;
-      prevBlock = prevBlock.previous;
-    }
+    // Row index within the table run (0 = header row).
+    final rowIndex = (container as Block).tableRowIndex;
 
     // Apply striped background to even rows (excluding row 0 which is header)
     // Row index 2, 4, 6... will get the stripe (visually rows 3, 5, 7...)
@@ -603,8 +621,7 @@ class RenderEditableTextTable extends RenderEditableContainerBox
   /// tableKey derivation in text_block.dart).
   bool get isLastTableRow {
     final nextBlock = container.next;
-    return !(nextBlock is Block &&
-        nextBlock.style.attributes.containsKey(Attribute.table.key));
+    return !(nextBlock is Block && nextBlock.isTableRow);
   }
 
   void _paintBorders(PaintingContext context, Offset offset) {
@@ -727,7 +744,8 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     final scrollFraction =
         (scrollState.offset / maxScrollExtent).clamp(0.0, 1.0);
     final thumbLeft = trackLeft + (trackWidth - thumbWidth) * scrollFraction;
-    final thumbTop = size.height - tableStyle.scrollbarBottomPadding - thickness;
+    final thumbTop = math.max<double>(
+        0, size.height - tableStyle.scrollbarBottomPadding - thickness);
 
     return Rect.fromLTWH(thumbLeft, thumbTop, thumbWidth, thickness);
   }
@@ -808,7 +826,7 @@ class RenderEditableTextTable extends RenderEditableContainerBox
         PointerDeviceKind.trackpad,
       },
     )
-      ..dragStartBehavior = DragStartBehavior.down
+      ..dragStartBehavior = DragStartBehavior.start
       ..onStart = (_) {
         _scrollState?.showIndicator();
       }
@@ -838,7 +856,11 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     } else if (event is PointerPanZoomStartEvent) {
       _ensureDragRecognizer().addPointerPanZoom(event);
     } else if (event is PointerScrollEvent &&
-        event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs()) {
+        event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs() &&
+        scrollState.canScrollBy(event.scrollDelta.dx)) {
+      // Only claim the wheel/trackpad scroll while the table can still move in
+      // that direction; once clamped at the extent, leave the event for a
+      // scrollable ancestor instead of swallowing it.
       GestureBinding.instance.pointerSignalResolver
           .register(event, _handlePointerScroll);
     }
@@ -858,6 +880,30 @@ class RenderEditableTextTable extends RenderEditableContainerBox
   }
 
   @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    final state = _scrollState;
+    if (state == null || !state.canScroll) return;
+    // Present the overflowing table as a horizontal scroll region so assistive
+    // technologies retain the off-screen cells and can reveal them, mirroring
+    // how the editor's vertical viewport exposes off-screen content.
+    config
+      ..hasImplicitScrolling = true
+      ..scrollPosition = state.offset
+      ..scrollExtentMin = 0
+      ..scrollExtentMax = state.maxScrollExtent;
+    final step = size.width * 0.8;
+    // scrollLeft reveals content to the right (increases offset); scrollRight
+    // reveals content to the left (decreases offset).
+    if (state.offset < state.maxScrollExtent) {
+      config.onScrollLeft = () => state.scrollBy(step);
+    }
+    if (state.offset > 0) {
+      config.onScrollRight = () => state.scrollBy(-step);
+    }
+  }
+
+  @override
   Rect getLocalRectForCaret(TextPosition position) {
     final child = childAtPosition(position);
     final localPosition = TextPosition(
@@ -866,6 +912,24 @@ class RenderEditableTextTable extends RenderEditableContainerBox
     );
     final parentData = child.parentData as EditableContainerParentData;
     return child.getLocalRectForCaret(localPosition).shift(parentData.offset);
+  }
+
+  /// Scrolls this table horizontally, if needed, so that the caret at
+  /// [position] (local to this row's node) is within the visible band. Keyboard
+  /// caret movement crosses cells by document offset with no awareness of the
+  /// horizontal scroll, so without this the caret can land in a clipped cell
+  /// and become invisible. A no-op when the table cannot scroll.
+  void revealCaretHorizontally(TextPosition position) {
+    final state = _scrollState;
+    if (state == null || !state.canScroll) return;
+    // Row-local caret rect (already folds in the current -rowShift).
+    final caret = getLocalRectForCaret(position);
+    const margin = 8.0;
+    if (caret.right > size.width) {
+      state.scrollTo(state.offset + (caret.right - size.width) + margin);
+    } else if (caret.left < 0) {
+      state.scrollTo(state.offset + caret.left - margin);
+    }
   }
 
   @override

@@ -32,6 +32,7 @@ import '../widgets/text/table_horizontal_scroll.dart';
 import '../widgets/text/text_block.dart';
 import '../widgets/text/text_line.dart';
 import '../widgets/text/text_selection.dart';
+import '../widgets/text/text_table.dart';
 import 'keyboard_shortcuts/editor_keyboard_shortcut_actions_manager.dart';
 import 'keyboard_shortcuts/editor_keyboard_shortcuts.dart';
 import 'raw_editor.dart';
@@ -584,6 +585,15 @@ class QuillRawEditorState extends EditorState
     // to the next EditableTextBlock
     var prevNodeOl = false;
     var clearIndents = false;
+    // Scroll key for the table run currently being iterated. Each table is
+    // keyed by its document-order position (a running ordinal) rather than a
+    // row id: the `table` attribute value is a per-row id, so a per-row key
+    // would reset scroll when the first row is deleted and would collide
+    // across copy-pasted tables (which duplicate row ids verbatim). The
+    // ordinal is assigned once at each run's first row and reused for the
+    // remaining rows, keeping key derivation O(number of blocks).
+    String? currentTableKey;
+    var tableRunOrdinal = 0;
 
     for (final node in doc.root.children) {
       final attrs = node.style.attributes;
@@ -601,6 +611,17 @@ class QuillRawEditorState extends EditorState
         result.add(Directionality(
             textDirection: nodeTextDirection, child: editableTextLine));
       } else if (node is Block) {
+        String? tableKey;
+        if (node.isTableRow) {
+          final prev = node.previous;
+          if (prev is! Block || !prev.isTableRow) {
+            // First row of a new table run.
+            currentTableKey = 'table-${tableRunOrdinal++}';
+          }
+          tableKey = currentTableKey;
+        } else {
+          currentTableKey = null;
+        }
         final editableTextBlock = EditableTextBlock(
           block: node,
           controller: controller,
@@ -608,6 +629,7 @@ class QuillRawEditorState extends EditorState
           textDirection: nodeTextDirection,
           scrollBottomInset: widget.config.scrollBottomInset,
           tableScrollRegistry: _tableScrollRegistry,
+          tableKey: tableKey,
           horizontalSpacing: _getHorizontalSpacingForBlock(node, _styles),
           verticalSpacing: _getVerticalSpacingForBlock(node, _styles),
           textSelection: controller.selection,
@@ -1176,13 +1198,19 @@ class QuillRawEditorState extends EditorState
 
     _showCaretOnScreenScheduled = true;
     SchedulerBinding.instance.addPostFrameCallback((_) {
+      _showCaretOnScreenScheduled = false;
+
+      if (!mounted) {
+        return;
+      }
+
+      // Reveal the caret horizontally within its table row, if it sits in one.
+      // Independent of the editor's own (vertical) scroll — a table can
+      // overflow even when the editor itself is not scrollable — so this runs
+      // outside the scrollable/hasClients guard below.
+      _revealCaretInOverflowingTable();
+
       if (widget.config.scrollable || _scrollController.hasClients) {
-        _showCaretOnScreenScheduled = false;
-
-        if (!mounted) {
-          return;
-        }
-
         final viewport = RenderAbstractViewport.of(renderEditor);
         final editorOffset =
             renderEditor.localToGlobal(const Offset(0, 0), ancestor: viewport);
@@ -1207,6 +1235,25 @@ class QuillRawEditorState extends EditorState
         }
       }
     });
+  }
+
+  /// If the caret (selection extent) sits inside a horizontally-scrollable
+  /// table, scrolls that table so the caret is visible. Keyboard movement
+  /// crosses table cells by document offset without adjusting the table's
+  /// horizontal scroll, so the caret can otherwise land in a clipped cell.
+  void _revealCaretInOverflowingTable() {
+    final selection = controller.selection;
+    if (!selection.isValid) {
+      return;
+    }
+    final position = TextPosition(
+      offset: selection.extentOffset,
+      affinity: selection.affinity,
+    );
+    final child = renderEditor.childAtPosition(position);
+    if (child is RenderEditableTextTable) {
+      child.revealCaretHorizontally(child.globalToLocalPosition(position));
+    }
   }
 
   /// The renderer for this widget's editor descendant.

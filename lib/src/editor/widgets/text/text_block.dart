@@ -57,22 +57,6 @@ const List<String> romanNumbers = [
   'I'
 ];
 
-/// Returns a stable key identifying the table that [block] (a table row)
-/// belongs to, so all rows of the same table share one horizontal scroll
-/// state. A "table" is a run of consecutive blocks carrying the table
-/// attribute; the key is derived from the first row's table id, which
-/// stays stable across unrelated edits to the table's own rows.
-String _tableKeyForBlock(Block block) {
-  var first = block;
-  var prev = block.previous;
-  while (prev is Block && prev.style.attributes.containsKey(Attribute.table.key)) {
-    first = prev;
-    prev = prev.previous;
-  }
-  return (first.style.attributes[Attribute.table.key]?.value as String?) ??
-      'table-${identityHashCode(first)}';
-}
-
 class EditableTextBlock extends StatelessWidget {
   const EditableTextBlock({
     required this.block,
@@ -103,6 +87,7 @@ class EditableTextBlock extends StatelessWidget {
     this.customLinkPrefixes = const <String>[],
     this.customLeadingBlockBuilder,
     this.tableScrollRegistry,
+    this.tableKey,
     super.key,
   });
 
@@ -135,6 +120,11 @@ class EditableTextBlock extends StatelessWidget {
   final TextRange composingRange;
   final TableScrollRegistry? tableScrollRegistry;
 
+  /// Stable key for the table run this block belongs to, precomputed by the
+  /// caller in a single document-order pass. Falls back to [Block.tableRunKey]
+  /// when omitted (a per-row backward walk).
+  final String? tableKey;
+
   @override
   Widget build(BuildContext context) {
     assert(debugCheckHasMediaQuery(context));
@@ -162,7 +152,7 @@ class EditableTextBlock extends StatelessWidget {
         textDirection: textDirection,
         tableStyle: tableStyle,
         scrollRegistry: tableScrollRegistry,
-        tableKey: _tableKeyForBlock(block),
+        tableKey: tableKey ?? block.tableRunKey,
         children: _buildChildren(
           context,
           indentLevelCounts,

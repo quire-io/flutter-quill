@@ -457,27 +457,11 @@ class _TextLineState extends State<TextLine> {
     return textStyle;
   }
 
-  /// Check if this line is in the first table row (header row).
+  /// Check if this line is in the first table row (header row), i.e. the row
+  /// is the first in its table run (a maximal run of adjacent table blocks).
   bool _isInFirstTableRow() {
-    // Check if this line has table attribute
-    if (!widget.line.style.attributes.containsKey(Attribute.table.key)) {
-      return false;
-    }
-
-    final currentTableValue = widget.line.style.attributes[Attribute.table.key]?.value;
-    final prevBlock = widget.line.parent?.previous;
-    // Check if the parent block has a previous table block with a different table value
-    if (prevBlock is Block) {
-      if (prevBlock.style.attributes.containsKey(Attribute.table.key)) {
-        final prevTableValue = prevBlock.style.attributes[Attribute.table.key]?.value;
-        // If previous block has different table value, this is not the first row
-        if (prevTableValue != currentTableValue) {
-          return false;
-        }
-      }
-    }
-
-    return true; // No previous table row found, this is the first
+    final block = widget.line.parent;
+    return block is Block && block.isTableRow && block.tableRowIndex == 0;
   }
 
   TextStyle _applyCustomAttributes(

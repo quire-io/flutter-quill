@@ -323,6 +323,36 @@ class DefaultTableStyle {
           scrollbarBottomPadding ?? this.scrollbarBottomPadding,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is DefaultTableStyle &&
+        other.border == border &&
+        other.cellPadding == cellPadding &&
+        other.stripeColor == stripeColor &&
+        other.headerStyle == headerStyle &&
+        other.minCellWidth == minCellWidth &&
+        other.scrollbarEnabled == scrollbarEnabled &&
+        other.scrollbarThickness == scrollbarThickness &&
+        other.scrollbarColor == scrollbarColor &&
+        other.scrollbarMinThumbWidth == scrollbarMinThumbWidth &&
+        other.scrollbarBottomPadding == scrollbarBottomPadding;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    border,
+    cellPadding,
+    stripeColor,
+    headerStyle,
+    minCellWidth,
+    scrollbarEnabled,
+    scrollbarThickness,
+    scrollbarColor,
+    scrollbarMinThumbWidth,
+    scrollbarBottomPadding,
+  );
 }
 
 @immutable

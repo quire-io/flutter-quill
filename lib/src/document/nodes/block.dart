@@ -73,6 +73,47 @@ base class Block extends QuillContainer<Line?> {
     }
   }
 
+  /// Whether this block is one row of a table, i.e. it carries the table
+  /// attribute. A "table" is a maximal run of adjacent table-row blocks (see
+  /// [adjust], which merges adjacent table blocks that share a table value,
+  /// so within a table each row-block has a distinct value).
+  bool get isTableRow => style.attributes.containsKey(Attribute.table.key);
+
+  /// The first row-block of the table run this block belongs to. Returns
+  /// `this` when the block is the run's first row (or not a table row).
+  Block get tableRunFirstRow {
+    var first = this;
+    var prev = first.previous;
+    while (prev is Block && prev.isTableRow) {
+      first = prev;
+      prev = prev.previous;
+    }
+    return first;
+  }
+
+  /// This row-block's zero-based index within its table run (0 for the header
+  /// row). Only meaningful for [isTableRow] blocks.
+  int get tableRowIndex {
+    var index = 0;
+    var prev = previous;
+    while (prev is Block && prev.isTableRow) {
+      index++;
+      prev = prev.previous;
+    }
+    return index;
+  }
+
+  /// A stable key identifying the table run this row belongs to, so every row
+  /// of the same table shares one horizontal scroll state. Derived from the
+  /// run's first row (see [tableRunFirstRow]); reading it on the first row
+  /// itself is O(1), so callers iterating in document order can compute it
+  /// once per run instead of walking back from every row.
+  String get tableRunKey {
+    final first = tableRunFirstRow;
+    return first.style.attributes[Attribute.table.key]?.value?.toString() ??
+        'table-${identityHashCode(first)}';
+  }
+
   @override
   String toString() {
     final block = style.attributes.toString();

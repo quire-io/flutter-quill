@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/src/editor/widgets/text/table_horizontal_scroll.dart';
 import 'package:flutter_quill/src/editor/widgets/text/text_table.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -122,6 +124,29 @@ void main() {
         reason: 'Regular A should not be bold');
       expect(regularBRichText.text.style?.fontWeight, isNot(equals(FontWeight.bold)),
         reason: 'Regular B should not be bold');
+    });
+
+    testWidgets(
+        'renders a document whose table attribute value is not a String '
+        'without crashing', (tester) async {
+      // Other Quill implementations / legacy data may carry a non-String
+      // table id (e.g. an int). The document must still render — previously
+      // deriving the scroll key cast the value to String and threw.
+      await tester.pumpWidget(const TableTestApp(
+        initialDelta: [
+          {'insert': 'Cell A'},
+          {'insert': '\n', 'attributes': {'table': 1}},
+          {'insert': 'Cell B'},
+          {'insert': '\n', 'attributes': {'table': 2}},
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(EditableTextTable), findsWidgets);
+      expect(find.text('Cell A', findRichText: true), findsOneWidget);
+      expect(find.text('Cell B', findRichText: true), findsOneWidget);
     });
 
     testWidgets('Debug childAtOffset method', (tester) async {
@@ -310,6 +335,173 @@ void main() {
       expect(rows[0].rowShiftForTest, greaterThan(0));
       expect(rows[1].rowShiftForTest, closeTo(rows[0].rowShiftForTest, 0.01),
           reason: 'both rows share one scroll state and must move together');
+    });
+
+    testWidgets('scrolling repaints in place without dirtying layout',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      // Start the drag: the first move only crosses the touch slop to make
+      // the gesture arena accept the drag (one frame); no scroll yet.
+      final gesture = await tester.startGesture(
+          tester.getCenter(find.byType(EditableTextTable).first));
+      await gesture.moveBy(const Offset(-30, 0));
+      await tester.pump();
+      expect(table.debugNeedsLayout, isFalse,
+          reason: 'clean once the accepting frame settles');
+
+      // The drag is now active, so a further move dispatches onUpdate — and
+      // thus the scroll — synchronously, before any frame. A scroll must only
+      // mark paint; dirtying layout here would relayout the whole document on
+      // every pointer-move tick.
+      await gesture.moveBy(const Offset(-40, 0));
+      expect(table.rowShiftForTest, greaterThan(0),
+          reason: 'the drag scrolled the table synchronously');
+      expect(table.debugNeedsLayout, isFalse,
+          reason: 'a scroll must not request a relayout');
+
+      await gesture.up();
+    });
+
+    testWidgets('two tables separated by a paragraph scroll independently',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          ...tableRow(['A1', 'B1', 'C1', 'D1'], 'row-1'),
+          {'insert': 'separator\n'},
+          ...tableRow(['A2', 'B2', 'C2', 'D2'], 'row-2'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final tables = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(tables, hasLength(2));
+
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+
+      expect(tables[0].rowShiftForTest, greaterThan(0));
+      expect(tables[1].rowShiftForTest, 0,
+          reason: 'the paragraph breaks the table run, so the second table '
+              'has its own scroll state and must not move');
+    });
+
+    testWidgets(
+        'two tables sharing a first-row id (copy-pasted) scroll independently',
+        (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(minCellWidth: 100),
+        initialDelta: [
+          // Two separate tables whose rows carry the SAME id, as a
+          // copy-pasted table would (paste duplicates row ids verbatim).
+          // Keying scroll state on the row id would couple them; keying on
+          // document position must keep them independent.
+          ...tableRow(['A1', 'B1', 'C1', 'D1'], 'dup'),
+          {'insert': 'separator\n'},
+          ...tableRow(['A2', 'B2', 'C2', 'D2'], 'dup'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final tables = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(tables, hasLength(2));
+
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+
+      expect(tables[0].rowShiftForTest, greaterThan(0));
+      expect(tables[1].rowShiftForTest, 0,
+          reason: 'tables are keyed by document position, so a shared row id '
+              'must not couple their scroll state');
+    });
+
+    testWidgets(
+        "deleting a table's first row preserves the remaining scroll offset",
+        (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson([
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          ...tableRow(['E', 'F', 'G', 'H'], 'row-2'),
+          {'insert': '\n'},
+        ]),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 400,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(
+                autoFocus: false,
+                customStyles: DefaultStyles(
+                  table: DefaultTableStyle(minCellWidth: 100),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      var tables = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(tables, hasLength(2), reason: 'one table with two rows');
+      final maxScroll = tables[0].contentWidthForTest - tables[0].size.width;
+      expect(maxScroll, greaterThan(0));
+
+      await tester.drag(find.byType(EditableTextTable).first,
+          Offset(-(maxScroll + 500), 0));
+      await tester.pumpAndSettle();
+      final scrolledShift = tables[1].rowShiftForTest;
+      expect(scrolledShift, greaterThan(0));
+
+      // Delete the entire first row ('A\nB\nC\nD\n' = 8 chars). Put the caret
+      // in the last cell 'H' (offset 6 in the remaining 'E\nF\nG\nH\n'), which
+      // is already visible at the scrolled offset, so the C2 caret-reveal
+      // leaves the table where it is and this test isolates C1's state
+      // preservation.
+      controller.replaceText(
+          0, 8, '', const TextSelection.collapsed(offset: 6));
+      await tester.pumpAndSettle();
+
+      tables = tester
+          .renderObjectList<RenderEditableTextTable>(
+              find.byType(EditableTextTable))
+          .toList();
+      expect(tables, hasLength(1), reason: 'only the second row remains');
+      expect(tables[0].rowShiftForTest, closeTo(scrolledShift, 0.5),
+          reason: 'the table keeps its ordinal-based key, so its scroll offset '
+              'survives deleting the first row');
     });
 
     testWidgets('hit-testing accounts for the current scroll offset',
@@ -767,6 +959,38 @@ void main() {
 
       expect(table, paints..rrect(color: DefaultTableStyle.defaultDarkScrollbarColor));
     });
+
+    testWidgets(
+        'indicator top is floored at 0 on a short row with large bottom '
+        'padding (never paints over the previous row)', (tester) async {
+      await tester.pumpWidget(TableTestApp(
+        editorWidth: 200,
+        tableStyle: const DefaultTableStyle(
+          minCellWidth: 100,
+          // Deliberately larger than a single-line row's own height, which
+          // would drive an unclamped thumbTop negative.
+          scrollbarBottomPadding: 500,
+          scrollbarThickness: 6,
+        ),
+        initialDelta: [
+          ...tableRow(['A', 'B', 'C', 'D'], 'row-1'),
+          {'insert': '\n'},
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      await tester.drag(
+          find.byType(EditableTextTable).first, const Offset(-40, 0));
+      await tester.pump();
+
+      final thumb = table.scrollbarThumbRectForTest;
+      expect(thumb, isNotNull);
+      expect(thumb!.top, greaterThanOrEqualTo(0),
+          reason: 'thumbTop must not go negative and paint into the row above');
+    });
   });
 
   group('Table striped background', () {
@@ -851,6 +1075,219 @@ void main() {
       // Rows 2, 4 — stripe
       expect(rows[2], paints..rect(color: stripeColor));
       expect(rows[4], paints..rect(color: stripeColor));
+    });
+  });
+
+  group('Table accessibility', () {
+    testWidgets('off-screen cells stay reachable in the semantics tree',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      final controller = QuillController(
+        document: Document.fromJson([
+          // Table at the top (vertically visible) with a unique horizontally
+          // off-screen cell 'ZZZ'; filler below forces vertical overflow so the
+          // scroll viewport applies its semantics clip.
+          ...tableRow(['AAA', 'BBB', 'CCC', 'ZZZ'], 'row-1'),
+          ...List.generate(60, (i) => {'insert': 'filler line $i\n'}),
+          {'insert': '\n'},
+        ]),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 300,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(
+                autoFocus: false,
+                customStyles: DefaultStyles(
+                  table: DefaultTableStyle(minCellWidth: 100),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      // Collect every label in the table's semantics subtree (including hidden
+      // nodes retained by the scroll region, which label-finders skip).
+      final labels = <String>[];
+      void collect(SemanticsNode node) {
+        final label = node.getSemanticsData().label;
+        if (label.isNotEmpty) labels.add(label);
+        node.visitChildren((child) {
+          collect(child);
+          return true;
+        });
+      }
+
+      collect(tester.getSemantics(find.byType(EditableTextTable).first));
+
+      // Sanity: a horizontally-visible cell is present in the semantics tree.
+      expect(labels.any((l) => l.contains('AAA')), isTrue);
+      // The horizontally off-screen cell must also be retained — the table
+      // exposes horizontal scroll semantics so AT can reach it, instead of the
+      // vertical viewport's clip dropping it. Fails without the C5 fix.
+      expect(labels.any((l) => l.contains('ZZZ')), isTrue,
+          reason: 'off-screen table cell must remain in the semantics tree');
+
+      handle.dispose();
+    });
+  });
+
+  group('Table caret reveal', () {
+    testWidgets('moving the caret into an off-screen cell reveals it',
+        (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson(tableRow(['A', 'B', 'C', 'D'], 'row-1')),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 400,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(
+                autoFocus: true,
+                customStyles: DefaultStyles(
+                  table: DefaultTableStyle(minCellWidth: 100),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+      expect(table.contentWidthForTest, greaterThan(table.size.width));
+      expect(table.rowShiftForTest, 0);
+
+      // Move the caret into the rightmost cell 'D' (offset 6), which is
+      // scrolled off the right edge at rest.
+      controller.updateSelection(
+          const TextSelection.collapsed(offset: 6), ChangeSource.local);
+      await tester.pumpAndSettle();
+
+      expect(table.rowShiftForTest, greaterThan(0),
+          reason: 'the table auto-scrolled to bring the caret into view');
+      final caret = table.getLocalRectForCaret(const TextPosition(offset: 6));
+      expect(caret.left, greaterThanOrEqualTo(0));
+      expect(caret.right, lessThanOrEqualTo(table.size.width + 8.5),
+          reason: 'caret now within the visible band (plus the reveal margin)');
+    });
+
+    testWidgets('a caret in an already-visible cell does not scroll',
+        (tester) async {
+      final controller = QuillController(
+        document: Document.fromJson(tableRow(['A', 'B', 'C', 'D'], 'row-1')),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 400,
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(
+                autoFocus: true,
+                customStyles: DefaultStyles(
+                  table: DefaultTableStyle(minCellWidth: 100),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final table = tester.renderObject<RenderEditableTextTable>(
+          find.byType(EditableTextTable).first);
+
+      // Cell 'B' (offset 2) is within the viewport at rest — no scroll needed.
+      controller.updateSelection(
+          const TextSelection.collapsed(offset: 2), ChangeSource.local);
+      await tester.pumpAndSettle();
+
+      expect(table.rowShiftForTest, 0,
+          reason: 'a caret in a visible cell must not move the table');
+    });
+  });
+
+  group('Table scroll state internals', () {
+    test('maxScrollExtent ignores sub-epsilon floating-point overflow', () {
+      final state = TableHorizontalScrollState(vsync: const TestVSync());
+      addTearDown(state.dispose);
+      final row = RenderLimitedBox();
+
+      // Evenly dividing a width can make (width / n) * n exceed width by a
+      // few ULPs. Such residue must not make a visually-fitting table report
+      // as scrollable (which would let it steal horizontal swipes/wheels).
+      state.reportRowGeometry(row, 100 + 1e-9, 100);
+      expect(state.maxScrollExtent, 0);
+      expect(state.canScroll, isFalse);
+
+      // A real overflow beyond the tolerance still scrolls.
+      state.reportRowGeometry(row, 150, 100);
+      expect(state.maxScrollExtent, closeTo(50, 1e-6));
+      expect(state.canScroll, isTrue);
+    });
+
+    test('DefaultTableStyle has value equality so unchanged rebuilds do not '
+        'force a repaint', () {
+      // build() resolves a null scrollbarColor via copyWith on every rebuild;
+      // with value equality two such resolutions compare equal, so the render
+      // object's `value == _tableStyle` guard short-circuits instead of
+      // repainting every table row on every keystroke.
+      const base = DefaultTableStyle(minCellWidth: 100);
+      final resolvedOnce = base.copyWith(
+          scrollbarColor: DefaultTableStyle.defaultLightScrollbarColor);
+      final resolvedAgain = base.copyWith(
+          scrollbarColor: DefaultTableStyle.defaultLightScrollbarColor);
+
+      expect(resolvedOnce, equals(resolvedAgain));
+      expect(resolvedOnce.hashCode, equals(resolvedAgain.hashCode));
+
+      // A genuine change is still detected.
+      expect(resolvedOnce, isNot(equals(base.copyWith(minCellWidth: 120))));
+    });
+
+    test('canScrollBy reflects remaining room in each direction', () {
+      final state = TableHorizontalScrollState(vsync: const TestVSync());
+      addTearDown(state.dispose);
+      final row = RenderLimitedBox();
+      state.reportRowGeometry(row, 300, 100); // maxScrollExtent = 200
+
+      // At offset 0: room to scroll right (positive delta), none to the left.
+      // A clamped edge must not be claimed, so a scrollable ancestor gets it.
+      expect(state.offset, 0);
+      expect(state.canScrollBy(10), isTrue);
+      expect(state.canScrollBy(-10), isFalse);
+      expect(state.canScrollBy(0), isFalse);
+
+      // In the middle: both directions have room.
+      state.scrollTo(100);
+      expect(state.canScrollBy(10), isTrue);
+      expect(state.canScrollBy(-10), isTrue);
+
+      // At the max extent: room left, none to the right.
+      state.scrollTo(1000); // clamps to 200
+      expect(state.offset, 200);
+      expect(state.canScrollBy(10), isFalse);
+      expect(state.canScrollBy(-10), isTrue);
     });
   });
 }
