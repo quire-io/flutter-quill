@@ -251,4 +251,58 @@ void main() {
       });
     },
   );
+
+  group(
+    '2487 - Cannot add to a fixed-length list when painting the selection '
+    'over an empty non-left-aligned line',
+    () {
+      testWidgets(
+        'does not throw when the selection spans an empty line in an RTL editor',
+        (tester) async {
+          // In an RTL editor a line with TextAlign.start resolves to
+          // right-aligned. Once the editor is laid out and then resized,
+          // Flutter's TextPainter keeps the cached paragraph width while
+          // updating its content width, so its paintOffset becomes non-zero and
+          // TextPainter.getBoxesForSelection returns a fixed-length list. For an
+          // empty line contained by the selection, the paint code then appends
+          // the empty-line marker rect to that list, which used to throw
+          // "Unsupported operation: Cannot add to a fixed-length list".
+          // Reproduces the Arabic "Select All" crash from the issue.
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          await tester.binding.setSurfaceSize(const Size(800, 600));
+
+          final controller = QuillController(
+            document: Document.fromJson([
+              {'insert': 'مرحبا'},
+              {'insert': '\n'},
+              {'insert': '\n'},
+              {'insert': 'عالم'},
+              {'insert': '\n'},
+            ]),
+            // Spans the empty line (document offset 6) without reaching the
+            // document end, to isolate this crash from the unrelated
+            // "text position is not in the current node" assertion.
+            selection: const TextSelection(baseOffset: 0, extentOffset: 8),
+          );
+          addTearDown(controller.dispose);
+
+          await tester.pumpWidget(
+            QuillTestApp.home(
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: QuillEditor.basic(controller: controller),
+              ),
+            ),
+          );
+
+          // Resize the surface so the cached paragraph width no longer matches
+          // the content width, forcing a non-zero paintOffset on repaint.
+          await tester.binding.setSurfaceSize(const Size(400, 600));
+          await tester.pump();
+
+          expect(tester.takeException(), isNull);
+        },
+      );
+    },
+  );
 }

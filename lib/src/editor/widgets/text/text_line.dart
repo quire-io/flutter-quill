@@ -1403,9 +1403,13 @@ class RenderEditableTextLine extends RenderEditableBox {
           line.documentOffset <= textSelection.end &&
           textSelection.start <= line.documentOffset + line.length - 1) {
         final local = localSelection(line, textSelection, false);
-        _selectedRects ??= _body!.getBoxesForSelection(
-          local,
-        );
+        // Copy into a growable list: TextPainter.getBoxesForSelection can
+        // return a fixed-length list (when the paragraph's paintOffset is
+        // non-zero, e.g. RTL or center/right-aligned lines), which would throw
+        // on the add() below for empty lines contained by the selection.
+        _selectedRects ??= [
+          ..._body!.getBoxesForSelection(local),
+        ];
 
         // Paint a small rect at the start of empty lines that
         // are contained by the selection.
