@@ -1016,6 +1016,7 @@ class QuillRawEditorState extends EditorState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     closeConnectionIfNeeded();
     _keyboardVisibilitySubscription?.cancel();
     HardwareKeyboard.instance.removeHandler(_hardwareKeyboardEvent);
@@ -1342,6 +1343,15 @@ class QuillRawEditorState extends EditorState
   void removeTextPlaceholder() {
     // this is needed for Scribble (Stylus input) in Apple platforms
     // and this package does not implement this feature
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    // #26148: reconnect if the platform closed the connection while away
+    if (state == AppLifecycleState.resumed && _hasFocus && !hasConnection) {
+      openConnectionIfNeeded();
+    }
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/cupertino.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../common/extensions/view_id_ext.dart';
+import '../../common/utils/platform.dart';
 import '../../delta/delta_diff.dart';
 import '../../document/document.dart';
 import '../editor.dart';
@@ -382,6 +384,11 @@ mixin RawEditorStateTextInputClientMixin on EditorState
     _textInputConnection!.connectionClosedReceived();
     _textInputConnection = null;
     _lastKnownRemoteTextEditingValue = null;
+    // #26148: iOS keeps the closed client and may re-show an unbound keyboard
+    if (isIosApp) {
+      unawaited(
+          SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient'));
+    }
   }
 
   @override
